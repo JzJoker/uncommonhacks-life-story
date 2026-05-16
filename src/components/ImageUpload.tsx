@@ -2,12 +2,16 @@
 
 import Image from "next/image";
 import { Images } from "lucide-react";
-import { useId, useRef, useState, type ChangeEvent } from "react";
+import { useId, useRef, useState, type ChangeEvent, type ReactNode } from "react";
 
 type ImageUploadProps = {
   name?: string;
   label?: string;
   className?: string;
+  /** Tailwind classes applied to the inner image area (override default height with e.g. `aspect-[4/3] h-auto`). */
+  frameClassName?: string;
+  /** Absolutely-positioned content layered over the image (e.g. agent glow overlays). pointer-events pass through. */
+  overlay?: ReactNode;
   onChange?: (file: File | null) => void;
 };
 
@@ -15,6 +19,8 @@ export function ImageUpload({
   name,
   label = "Add a Photo",
   className = "",
+  frameClassName = "h-[252px]",
+  overlay,
   onChange,
 }: ImageUploadProps) {
   const inputId = useId();
@@ -42,9 +48,10 @@ export function ImageUpload({
       <label
         htmlFor={inputId}
         className={[
-          "flex h-[252px] w-full items-center justify-center",
+          "flex w-full items-center justify-center",
           "bg-[#f1f1f1] rounded-[4px] cursor-pointer overflow-hidden",
           "relative group",
+          frameClassName,
         ].join(" ")}
       >
         {previewUrl ? (
@@ -52,7 +59,7 @@ export function ImageUpload({
             src={previewUrl}
             alt="Uploaded preview"
             fill
-            sizes="354px"
+            sizes="(max-width: 640px) 100vw, 640px"
             className="object-cover"
             unoptimized
           />
@@ -61,6 +68,9 @@ export function ImageUpload({
             <Images size={48} strokeWidth={1.5} />
             <span className="text-xs">{label}</span>
           </div>
+        )}
+        {overlay && (
+          <div className="absolute inset-0 pointer-events-none">{overlay}</div>
         )}
         <input
           id={inputId}
