@@ -8,11 +8,15 @@ type ImageUploadProps = {
   name?: string;
   label?: string;
   className?: string;
-  /** Tailwind classes applied to the inner image area (override default height with e.g. `aspect-[4/3] h-auto`). */
+  /** Tailwind classes applied to the inner image area. */
   frameClassName?: string;
-  /** Absolutely-positioned content layered over the image (e.g. agent glow overlays). pointer-events pass through. */
+  /** Absolutely-positioned content layered over the image. */
   overlay?: ReactNode;
   onChange?: (file: File | null) => void;
+  /** Called with the object URL each time a new preview is created (null on clear). */
+  onPreviewChange?: (url: string | null) => void;
+  /** Called once the uploaded image element loads, with its natural dimensions. */
+  onImageLoad?: (naturalWidth: number, naturalHeight: number) => void;
 };
 
 export function ImageUpload({
@@ -22,6 +26,8 @@ export function ImageUpload({
   frameClassName = "h-[252px]",
   overlay,
   onChange,
+  onPreviewChange,
+  onImageLoad,
 }: ImageUploadProps) {
   const inputId = useId();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -29,10 +35,12 @@ export function ImageUpload({
 
   const handleChange = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0] ?? null;
+    const url = file ? URL.createObjectURL(file) : null;
     setPreviewUrl((prev) => {
       if (prev) URL.revokeObjectURL(prev);
-      return file ? URL.createObjectURL(file) : null;
+      return url;
     });
+    onPreviewChange?.(url);
     onChange?.(file);
   };
 
@@ -45,43 +53,55 @@ export function ImageUpload({
         className,
       ].join(" ")}
     >
-      <label
-        htmlFor={inputId}
-        className={[
-          "flex w-full items-center justify-center",
-          "bg-[#f1f1f1] rounded-[4px] cursor-pointer overflow-hidden",
-          "relative group",
-          frameClassName,
-        ].join(" ")}
-      >
-        {previewUrl ? (
-          <Image
-            src={previewUrl}
-            alt="Uploaded preview"
-            fill
-            sizes="(max-width: 640px) 100vw, 640px"
-            className="object-cover"
-            unoptimized
+      {/* Wrapper is relative so the overlay can be siblings with the label */}
+      <div className="relative">
+        <label
+          htmlFor={inputId}
+          className={[
+            "flex w-full items-center justify-center",
+            "bg-[#f1f1f1] rounded-[4px] cursor-pointer overflow-hidden",
+            "relative group",
+            frameClassName,
+          ].join(" ")}
+        >
+          {previewUrl ? (
+            <Image
+              src={previewUrl}
+              alt="Uploaded preview"
+              fill
+              sizes="(max-width: 640px) 100vw, 640px"
+              className="object-contain"
+              unoptimized
+              onLoad={(e) => {
+                const { naturalWidth, naturalHeight } = e.currentTarget;
+                onImageLoad?.(naturalWidth, naturalHeight);
+              }}
+            />
+          ) : (
+            <div className="flex flex-col items-center gap-2.5 text-muted">
+              <Images size={48} strokeWidth={1.5} />
+              <span className="text-xs">{label}</span>
+            </div>
+          )}
+          <input
+            id={inputId}
+            ref={inputRef}
+            name={name}
+            type="file"
+            accept="image/*"
+            onChange={handleChange}
+            className="sr-only"
           />
-        ) : (
-          <div className="flex flex-col items-center gap-2.5 text-muted">
-            <Images size={48} strokeWidth={1.5} />
-            <span className="text-xs">{label}</span>
+        </label>
+
+        {/* Overlay sits outside the label so clicks on interactive overlay elements
+            don't bubble up and accidentally open the file picker. */}
+        {overlay && (
+          <div className="absolute inset-0 pointer-events-none rounded-[4px] overflow-hidden">
+            {overlay}
           </div>
         )}
-        {overlay && (
-          <div className="absolute inset-0 pointer-events-none">{overlay}</div>
-        )}
-        <input
-          id={inputId}
-          ref={inputRef}
-          name={name}
-          type="file"
-          accept="image/*"
-          onChange={handleChange}
-          className="sr-only"
-        />
-      </label>
+      </div>
     </div>
   );
 }
