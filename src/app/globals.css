@@ -6,6 +6,7 @@
   --color-polaroid: #ffffff;
   --color-cream-50: #f2f1ed;
   --color-cream-100: #e7dbbc;
+  --color-cover-fallback: #ddc173;
   --color-stroke: #d8d8d8;
   --color-muted: #6f6f6f;
   --color-primary-fg: #fefef5;
@@ -15,6 +16,15 @@
 
   --font-sans: var(--font-inter), "Helvetica Neue", Helvetica, Arial, sans-serif;
   --font-hand: var(--font-caveat), "Bradley Hand", cursive;
+}
+
+@utility scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
 }
 
 html,
