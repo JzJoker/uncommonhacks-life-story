@@ -185,7 +185,7 @@ export default function BookFrame({
 
   return (
     <article
-      className={`group flex w-[338px] shrink-0 flex-col items-start justify-center gap-20 ${className}`.trim()}
+      className={`group flex w-[338px] shrink-0 flex-col items-start justify-center gap-8 ${className}`.trim()}
     >
       <div
         className="relative h-[507px] w-[338px]"
