@@ -1,7 +1,15 @@
 "use client";
 
 import Image from "next/image";
-import { useCallback, useRef, useState, type CSSProperties } from "react";
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+} from "react";
+import { createPortal } from "react-dom";
 import Button from "./Button";
 
 const PHOTO_ONE = "/dashboard/photo-1.png";
@@ -29,18 +37,19 @@ export default function BookFrame({
   coverImages = [PHOTO_ONE],
 }: BookFrameProps) {
   const shellRef = useRef<HTMLDivElement>(null);
+  const bookRef = useRef<HTMLDivElement>(null);
   const placeholderRef = useRef<HTMLDivElement>(null);
   const [isExpanded, setIsExpanded] = useState(false);
   const [isCollapsing, setIsCollapsing] = useState(false);
   const [flyStyle, setFlyStyle] = useState<CSSProperties | null>(null);
   const [showBackdrop, setShowBackdrop] = useState(false);
+  const [canPortal, setCanPortal] = useState(false);
 
-  const expand = useCallback(() => {
-    const el = shellRef.current;
-    if (!el) return;
+  useEffect(() => {
+    setCanPortal(true);
+  }, []);
 
-    const rect = el.getBoundingClientRect();
-
+  const startFlyFrom = useCallback((rect: DOMRect) => {
     setFlyStyle({
       position: "fixed",
       top: 0,
@@ -51,9 +60,6 @@ export default function BookFrame({
       zIndex: 50,
       transition: "none",
     });
-    setIsExpanded(true);
-    setIsCollapsing(false);
-    setShowBackdrop(true);
 
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
@@ -70,6 +76,18 @@ export default function BookFrame({
       });
     });
   }, []);
+
+  const expand = useCallback(() => {
+    const bookEl = bookRef.current;
+    if (!bookEl) return;
+
+    const rect = bookEl.getBoundingClientRect();
+
+    setIsCollapsing(false);
+    startFlyFrom(rect);
+    setShowBackdrop(true);
+    setIsExpanded(true);
+  }, [startFlyFrom]);
 
   const collapse = useCallback(() => {
     const placeholder = placeholderRef.current;
@@ -94,6 +112,7 @@ export default function BookFrame({
   }, [collapse, expand, isCollapsing, isExpanded]);
 
   const showExpandedUI = isExpanded && !isCollapsing;
+  const isFlying = flyStyle !== null;
 
   const onFlyTransitionEnd = useCallback(
     (event: React.TransitionEvent<HTMLDivElement>) => {
@@ -107,40 +126,31 @@ export default function BookFrame({
     [isCollapsing],
   );
 
-  return (
-    <article
-      className={`group flex w-[338px] shrink-0 flex-col items-start justify-center gap-20 ${className}`.trim()}
+  const shell = (
+    <div
+      ref={shellRef}
+      style={flyStyle ?? undefined}
+      className={isFlying ? "relative" : "relative"}
+      onTransitionEnd={onFlyTransitionEnd}
+      onClick={isFlying ? toggle : undefined}
+      onKeyDown={
+        isFlying
+          ? (e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                toggle();
+              }
+            }
+          : undefined
+      }
+      role={isFlying ? "button" : undefined}
+      tabIndex={isFlying ? 0 : undefined}
     >
-      <div
-        className="relative h-[507px] w-[338px]"
-        onClick={toggle}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault();
-            toggle();
-          }
-        }}
-        role="button"
-        tabIndex={0}
-        aria-expanded={isExpanded}
-      >
-        {isExpanded && (
-          <div
-            ref={placeholderRef}
-            className="invisible h-full w-full"
-            aria-hidden
-          />
-        )}
-
-        <div
-          ref={shellRef}
-          style={flyStyle ?? undefined}
-          className={isExpanded ? undefined : "relative"}
-          onTransitionEnd={onFlyTransitionEnd}
-        >
-          <div className="flex flex-col gap-3">
+      {isFlying ? (
+        <>
+          {(isExpanded || isCollapsing) && (
             <p
-              className={`text-center font-hand text-3xl text-ink transition-opacity ease-out ${
+              className={`absolute bottom-full left-1/2 mb-3 w-max -translate-x-1/2 text-center font-hand text-3xl whitespace-nowrap text-ink transition-opacity ease-out ${
                 showExpandedUI
                   ? "opacity-100 duration-200"
                   : `pointer-events-none opacity-0 ${isCollapsing ? "duration-0" : "duration-75"}`
@@ -148,9 +158,11 @@ export default function BookFrame({
             >
               {title}
             </p>
-            <BookCover coverImages={coverImages} />
+          )}
+          <BookCover ref={bookRef} coverImages={coverImages} />
+          {(isExpanded || isCollapsing) && (
             <div
-              className={`pt-8 transition-opacity ease-out ${
+              className={`absolute top-full right-0 left-0 pt-12 transition-opacity ease-out ${
                 showExpandedUI
                   ? "opacity-100 duration-200"
                   : `pointer-events-none opacity-0 ${isCollapsing ? "duration-0" : "duration-75"}`
@@ -163,22 +175,64 @@ export default function BookFrame({
                 variant="primary"
               />
             </div>
-          </div>
-        </div>
-      </div>
-      {showBackdrop && (
-        <button
-          type="button"
-          aria-label="Close album"
-          className={`fixed inset-0 z-40 backdrop-blur-sm bg-white/80 transition-opacity duration-500 ${
-            isCollapsing ? "opacity-0" : "opacity-100"
-          }`}
-          onClick={(e) => {
-            e.stopPropagation();
-            collapse();
-          }}
-        />
+          )}
+        </>
+      ) : (
+        <BookCover ref={bookRef} coverImages={coverImages} />
       )}
+    </div>
+  );
+
+  return (
+    <article
+      className={`group flex w-[338px] shrink-0 flex-col items-start justify-center gap-20 ${className}`.trim()}
+    >
+      <div
+        className="relative h-[507px] w-[338px]"
+        onClick={!isFlying ? toggle : undefined}
+        onKeyDown={
+          !isFlying
+            ? (e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  toggle();
+                }
+              }
+            : undefined
+        }
+        role={!isFlying ? "button" : undefined}
+        tabIndex={!isFlying ? 0 : undefined}
+        aria-expanded={isExpanded}
+      >
+        {isExpanded && (
+          <div
+            ref={placeholderRef}
+            className="invisible h-full w-full"
+            aria-hidden
+          />
+        )}
+
+        {isFlying
+          ? canPortal
+            ? createPortal(shell, document.body)
+            : shell
+          : shell}
+      </div>
+
+      {showBackdrop &&
+        canPortal &&
+        createPortal(
+          <button
+            type="button"
+            aria-label="Close album"
+            className={`fixed inset-0 z-40 bg-white/80 backdrop-blur-sm transition-opacity duration-500 ${
+              isCollapsing ? "opacity-0" : "opacity-100"
+            }`}
+            onClick={collapse}
+          />,
+          document.body,
+        )}
+
       <div className="flex w-full flex-col items-start">
         <div className="flex flex-col items-start gap-[7px] whitespace-nowrap">
           <h2 className="font-hand text-2xl font-light text-ink">{title}</h2>
@@ -189,74 +243,72 @@ export default function BookFrame({
   );
 }
 
-function BookCover({ coverImages }: { coverImages: string[] }) {
-  return (
-    <div className="relative flex-none -skew-x-1 cursor-pointer transition-transform duration-300 group-hover:scale-98 active:scale-95">
-      <div className="relative z-10 z-40  flex h-[507px] w-full items-start overflow-hidden rounded-r-3xl bg-gray-200">
-        <div className="relative z-30 h-full w-10 bg-black/10">
-          <div className="pointer-events-none absolute inset-0 flex justify-between">
-            {Array.from({ length: 12 }).map((_, i) => (
-              <div key={i} className="h-full w-px bg-white/10" />
-            ))}
+const BookCover = forwardRef<HTMLDivElement, { coverImages: string[] }>(
+  function BookCover({ coverImages }, ref) {
+    return (
+      <div
+        ref={ref}
+        className="relative flex-none -skew-x-1 cursor-pointer transition-transform duration-300 group-hover:scale-98 active:scale-95"
+      >
+        <div className="relative z-10 z-40 flex h-[507px] w-full items-start overflow-hidden rounded-r-3xl bg-gray-200">
+          <div className="relative z-30 h-full w-10 bg-black/10">
+            <div className="pointer-events-none absolute inset-0 flex justify-between">
+              {Array.from({ length: 12 }).map((_, i) => (
+                <div key={i} className="h-full w-px bg-white/10" />
+              ))}
+            </div>
+          </div>
+          <div className="relative grid h-full w-full place-items-center p-12 group-hover:scale-95">
+            <div className="absolute top-1/2 left-1/2 z-1 w-[70%] -translate-x-1/2 -translate-y-1/2 bg-white p-3 pb-12 shadow-sm transition-transform duration-300">
+              <div className="relative aspect-square w-full bg-green-500">
+                <Image
+                  src={coverImages[0]}
+                  alt=""
+                  fill
+                  className="object-cover"
+                  sizes="100%"
+                />
+              </div>
+            </div>
+            <div className="absolute top-1/2 left-1/2 z-3 w-[70%] -translate-x-1/2 -translate-y-1/2 bg-white p-3 pb-12 shadow-sm transition-transform duration-300 group-hover:-translate-x-[calc(50%-24px)] group-hover:rotate-4">
+              <div className="relative aspect-square w-full bg-green-500">
+                <Image
+                  src={coverImages[0]}
+                  alt=""
+                  fill
+                  className="object-cover"
+                  sizes="100%"
+                />
+              </div>
+            </div>
+            <div className="absolute top-1/2 left-1/2 w-[70%] -translate-x-1/2 -translate-y-1/2 bg-white p-3 pb-12 shadow-sm transition-transform duration-300 group-hover:-translate-x-[calc(50%+24px)] group-hover:-rotate-4">
+              <div className="relative aspect-square w-full bg-green-500">
+                <Image
+                  src={coverImages[0]}
+                  alt=""
+                  fill
+                  className="object-cover"
+                  sizes="100%"
+                />
+              </div>
+            </div>
           </div>
         </div>
-        <div className="relative grid h-full w-full place-items-center p-12 group-hover:scale-95">
-          <div className="absolute top-1/2 left-1/2 z-1 w-[70%] -translate-x-1/2 -translate-y-1/2 bg-white p-3 pb-12 shadow-sm transition-transform duration-300">
-            <div className="relative aspect-square w-full bg-green-500">
-              <Image
-                src={coverImages[0]}
-                alt=""
-                fill
-                className="object-cover"
-                sizes="100%"
-              />
-            </div>
-          </div>
-          <div className="absolute top-1/2 left-1/2 z-3 w-[70%] -translate-x-1/2 -translate-y-1/2 bg-white p-3 pb-12 shadow-sm transition-transform duration-300 group-hover:-translate-x-[calc(50%-24px)] group-hover:rotate-4">
-            <div className="relative aspect-square w-full bg-green-500">
-              <Image
-                src={coverImages[0]}
-                alt=""
-                fill
-                className="object-cover"
-                sizes="100%"
-              />
-            </div>
-          </div>
-          <div className="absolute top-1/2 left-1/2 w-[70%] -translate-x-1/2 -translate-y-1/2 bg-white p-3 pb-12 shadow-sm transition-transform duration-300 group-hover:-translate-x-[calc(50%+24px)] group-hover:-rotate-4">
-            <div className="relative aspect-square w-full bg-green-500">
-              <Image
-                src={coverImages[0]}
-                alt=""
-                fill
-                className="object-cover"
-                sizes="100%"
-              />
-            </div>
-          </div>
-        </div>
-      </div>
-      <div>
-        {/* <div className="pointer-events-none absolute top-0 right-0 z-50 flex h-full w-[24px] translate-x-[24px] justify-between">
-          {Array.from({ length: 8 }, (_, i) => i).map((d) => (
+        <div>
+          {Array.from({ length: 8 }, (_, i) => i + 1).map((d, i) => (
             <div
               key={d}
-              className="h-full w-px bg-linear-to-b from-transparent via-black/20 to-transparent"
-              style={{ transform: `translateY(${d * 4}px)` }}
+              className="absolute inset-0 rounded-r-3xl border border-l-0 border-black/20 bg-white"
+              style={{
+                transform: `translate(${i * 2}px, ${i * 2}px)`,
+                zIndex: 24 - i,
+              }}
             />
           ))}
-        </div> */}
-        {Array.from({ length: 8 }, (_, i) => i + 1).map((d, i) => (
-          <div
-            key={d}
-            className="absolute inset-0 rounded-r-3xl border-l-0  bg-white border border-black/20 "
-            style={{
-              transform: `translate(${i * 2}px, ${i * 2}px)`,
-              zIndex: 24 - i,
-            }}
-          />
-        ))}
+        </div>
       </div>
-    </div>
-  );
-}
+    );
+  },
+);
+
+BookCover.displayName = "BookCover";

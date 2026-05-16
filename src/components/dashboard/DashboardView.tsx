@@ -28,7 +28,7 @@ const books = [
 export default function DashboardView() {
   return (
     <HorizontalScroll
-      className="fixed inset-0 flex scale-100 flex-col justify-center gap-0 overflow-x-hidden bg-cream-50 py-16 text-ink"
+      className="fixed inset-0 flex flex-col justify-center gap-0 overflow-x-hidden bg-cream-50 py-16 text-ink"
       viewportClassName="min-h-0 flex h-full w-full flex-1 overflow-x-auto overscroll-x-contain scrollbar-hide"
       header={
         <header className="flex w-full shrink-0 items-start justify-between px-32">
