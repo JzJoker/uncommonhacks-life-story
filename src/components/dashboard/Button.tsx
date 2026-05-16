@@ -6,7 +6,7 @@ const variants = {
   default:
     "border-stroke bg-paper text-ink hover:border-cream-100 hover:bg-cream-50 active:border-cream-100 active:bg-cream-100",
   primary:
-    "border-ink bg-ink text-white hover:bg-ink/90 active:bg-ink/80 active:border-ink/80",
+    "border-ink bg-ink text-primary-fg hover:bg-ink/90 active:bg-ink/80 active:border-ink/80",
 } as const;
 
 const baseClass =

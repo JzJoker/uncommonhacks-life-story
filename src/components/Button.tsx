@@ -1,4 +1,5 @@
 import { forwardRef, type ButtonHTMLAttributes } from "react";
+import { BlurText } from "@/components/BlurText";
 
 type ButtonVariant = "default" | "primary";
 type ButtonSize = "base" | "sm";
@@ -20,9 +21,19 @@ const variantStyles: Record<ButtonVariant, string> = {
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
   function Button(
-    { className = "", variant = "default", size = "base", type = "button", ...props },
+    {
+      className = "",
+      variant = "default",
+      size = "base",
+      type = "button",
+      children,
+      ...props
+    },
     ref
   ) {
+    const content =
+      typeof children === "string" ? <BlurText>{children}</BlurText> : children;
+
     return (
       <button
         ref={ref}
@@ -37,7 +48,9 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
           variantStyles[variant],
           className,
         ].join(" ")}
-      />
+      >
+        {content}
+      </button>
     );
   }
 );
