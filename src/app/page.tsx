@@ -62,19 +62,21 @@ export default function HomePage() {
 
   return (
     <main className="min-h-svh bg-cream-50 flex flex-col items-center justify-center px-6 py-16 gap-10">
-      <header className="flex flex-col items-center gap-2 text-center">
-        <h1 className="font-hand text-[36px] text-ink">Life Stories</h1>
-        <p className="text-base font-light text-muted">Choose a life story to explore or contribute to.</p>
-        <SignOutButton className="mt-1" />
-      </header>
+      {patients.length > 0 && (
+        <header className="flex flex-col items-center gap-2 text-center">
+          <h1 className="font-hand text-[36px] text-ink">Life Stories</h1>
+          <p className="text-base font-light text-muted">Choose a life story to explore or contribute to.</p>
+          <SignOutButton className="mt-1" />
+        </header>
+      )}
 
       {patients.length === 0 ? (
-        <div className="flex flex-col items-center gap-4 text-center">
-          <p className="text-base font-light text-muted">No life stories yet.</p>
-          <Link href="/onboarding">
-            <Button variant="primary" className="uppercase tracking-[0.18em]">Create one</Button>
-          </Link>
-        </div>
+        <Link href="/onboarding">
+          <Button variant="primary">
+            <span>Start your&nbsp;</span>
+            <span className="font-hand text-[22px]">Life Story</span>
+          </Button>
+        </Link>
       ) : (
         <div className="flex flex-wrap gap-4 justify-center max-w-2xl">
           {patients.map((p) => (
