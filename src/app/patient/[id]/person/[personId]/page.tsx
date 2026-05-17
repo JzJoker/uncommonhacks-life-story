@@ -20,6 +20,7 @@ export default async function PersonAlbumPage(props: {
         memories (
           id,
           image_url,
+          summary,
           answer_who_is_this,
           answer_whats_going_on,
           message_audio_url
@@ -38,7 +39,7 @@ export default async function PersonAlbumPage(props: {
     .map((mp: any, i: number) => ({
       id: `${mp.id}-${i}`,
       src: mp.memories.image_url as string,
-      quote: (mp.memories.answer_whats_going_on || mp.memories.answer_who_is_this || "") as string,
+      quote: (mp.memories.summary || mp.memories.answer_whats_going_on || mp.memories.answer_who_is_this || "") as string,
       attribution: relation ? `${name}, your ${relation.toLowerCase()}` : name,
       messageAudioUrl: (mp.memories.message_audio_url as string | null) ?? null,
     }));
