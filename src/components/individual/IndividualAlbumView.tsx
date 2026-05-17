@@ -10,6 +10,7 @@ export type PhotoCardData = {
   src: string;
   quote: string;
   attribution: string;
+  messageAudioUrl?: string | null;
 };
 
 const FLIP_DURATION = 0.85;
@@ -154,6 +155,7 @@ export default function IndividualAlbumView({
                 src={featured.src}
                 quote={featured.quote}
                 attribution={featured.attribution}
+                messageAudioUrl={featured.messageAudioUrl}
               />
             </motion.div>
           )}
@@ -189,6 +191,7 @@ export default function IndividualAlbumView({
                     src={card.src}
                     quote={card.quote}
                     attribution={card.attribution}
+                    messageAudioUrl={card.messageAudioUrl}
                   />
                 </motion.button>
               );

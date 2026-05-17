@@ -21,7 +21,8 @@ export default async function PersonAlbumPage(props: {
           id,
           image_url,
           answer_who_is_this,
-          answer_whats_going_on
+          answer_whats_going_on,
+          message_audio_url
         )
       `)
       .eq("friend_family_id", personId),
@@ -39,6 +40,7 @@ export default async function PersonAlbumPage(props: {
       src: mp.memories.image_url as string,
       quote: (mp.memories.answer_whats_going_on || mp.memories.answer_who_is_this || "") as string,
       attribution: relation ? `${name}, your ${relation.toLowerCase()}` : name,
+      messageAudioUrl: (mp.memories.message_audio_url as string | null) ?? null,
     }));
 
   const bio = relation
