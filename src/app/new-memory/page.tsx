@@ -26,7 +26,7 @@ function sortByX(boxes: PersonBox[]): PersonBox[] {
 
 function getMessage(state: FlowState, idx: number, total: number): string {
   switch (state) {
-    case "empty":     return "Ready for memory upload. Please upload an image for cataloging.";
+    case "empty":     return "Please upload an image for this memory.";
     case "analyzing": return "Analyzing your image. Looking for familiar figures…";
     case "identifying":
       if (total === 0) return "Who is this person?";
@@ -91,10 +91,13 @@ export default function NewMemoryPage() {
 
   return (
     <div className="min-h-svh bg-cream-50 flex flex-col items-center justify-center p-6 sm:p-10">
-      <div className="w-full max-w-[640px] flex flex-col gap-8 items-stretch">
+      <div className="w-full max-w-[354px] flex flex-col gap-8 items-stretch">
+        <h1 className="font-hand text-[32px] leading-normal text-ink">
+          New Memory
+        </h1>
         <ImageUpload
           name="photo"
-          label="Upload Memory"
+          label="Add a Photo"
           frameClassName="aspect-[4/3] h-auto"
           overlay={
             <PhotoOverlay
@@ -146,15 +149,6 @@ function PhotoOverlay({
 }) {
   return (
     <>
-      <Sparkle
-        size={18}
-        fill="currentColor"
-        className={[
-          "absolute bottom-3 right-3 text-ink/80 pointer-events-none z-10",
-          analyzing ? "animate-pulse" : "",
-        ].join(" ")}
-        aria-hidden
-      />
       {!drawing && box && naturalSize && (
         <PersonBoxOverlay bbox={box.bbox} naturalSize={naturalSize} />
       )}

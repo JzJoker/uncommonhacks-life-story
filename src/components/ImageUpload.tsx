@@ -48,7 +48,7 @@ export function ImageUpload({
     <div
       className={[
         "bg-paper border border-cream-100 rounded-[4px]",
-        "w-full p-4 pb-8",
+        "w-full p-4 pb-8 h-[300px]",
         "shadow-[4px_4px_4px_0_rgba(0,0,0,0.04)]",
         className,
       ].join(" ")}
