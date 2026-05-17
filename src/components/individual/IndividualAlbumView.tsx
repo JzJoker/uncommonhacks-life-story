@@ -244,7 +244,7 @@ export default function IndividualAlbumView({
                 <p className="text-sm text-muted">{featured.attribution}</p>
                 <div className="flex flex-wrap gap-3">
                   <Button
-                    text="See more of Justin"
+                    text={`See more of ${personName}`}
                     variant="primary"
                     onClick={handleSeeMore}
                     disabled={isAnimating || isFlipped}

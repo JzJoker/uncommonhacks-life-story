@@ -29,6 +29,7 @@ type BookFrameProps = {
   title?: string;
   dateRange?: string;
   coverImages?: CoverImage[];
+  albumHref?: string;
 };
 
 function centerTransform(rect: DOMRect) {
@@ -42,6 +43,7 @@ export default function BookFrame({
   title = "Early Childhood",
   dateRange = "1999-2007",
   coverImages = [PLACEHOLDER],
+  albumHref = "/",
 }: BookFrameProps) {
   const shellRef = useRef<HTMLDivElement>(null);
   const bookRef = useRef<HTMLDivElement>(null);
@@ -177,7 +179,7 @@ export default function BookFrame({
               }`}
             >
               <Button
-                href="/individual"
+                href={albumHref}
                 className="w-full"
                 text="View Album"
                 variant="primary"

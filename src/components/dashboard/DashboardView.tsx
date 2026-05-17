@@ -108,6 +108,7 @@ export default async function DashboardView({
               title={book.name}
               dateRange={book.relation ?? ""}
               coverImages={book.coverImages}
+              albumHref={`/patient/${patientId}/person/${book.id}`}
             />
           ))
         )}
