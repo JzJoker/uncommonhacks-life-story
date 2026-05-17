@@ -10,29 +10,125 @@ import { Pause, Play } from "lucide-react";
 /* -------------------------------------------------------------------------- */
 
 type Rect = { x: number; y: number; w: number; h: number };
+type Point = [number, number];
+type HighlightShape = { cutouts: Rect[]; outline: Point[] };
 
-function perimeterPoint(t: number, r: Rect): [number, number] {
-  const { x, y, w, h } = r;
-  const p = 2 * (w + h);
-  const d = (((t % 1) + 1) % 1) * p;
-  if (d < w)         return [x + d, y];
-  if (d < w + h)     return [x + w, y + (d - w)];
-  if (d < 2 * w + h) return [x + w - (d - w - h), y + h];
-  return [x, y + h - (d - 2 * w - h)];
+function rectsOverlap(a: Rect, b: Rect): boolean {
+  return a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
 }
 
-function drawGlowBorder(offCtx: CanvasRenderingContext2D, rect: Rect, headT: number, N: number) {
+function groupOverlappingRects(rects: Rect[]): Rect[][] {
+  const groups: Rect[][] = [];
+  const used = new Set<number>();
+
+  for (let i = 0; i < rects.length; i++) {
+    if (used.has(i)) continue;
+    const stack = [i];
+    const group: Rect[] = [];
+    used.add(i);
+
+    while (stack.length > 0) {
+      const idx = stack.pop()!;
+      const rect = rects[idx];
+      group.push(rect);
+      for (let j = 0; j < rects.length; j++) {
+        if (!used.has(j) && rectsOverlap(rect, rects[j])) {
+          used.add(j);
+          stack.push(j);
+        }
+      }
+    }
+    groups.push(group);
+  }
+  return groups;
+}
+
+function rectCorners(r: Rect): Point[] {
+  return [
+    [r.x, r.y],
+    [r.x + r.w, r.y],
+    [r.x + r.w, r.y + r.h],
+    [r.x, r.y + r.h],
+  ];
+}
+
+function convexHull(points: Point[]): Point[] {
+  if (points.length <= 1) return points;
+  const pts = [...points].sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  const cross = (o: Point, a: Point, b: Point) =>
+    (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+
+  const lower: Point[] = [];
+  for (const p of pts) {
+    while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], p) <= 0) {
+      lower.pop();
+    }
+    lower.push(p);
+  }
+  const upper: Point[] = [];
+  for (let i = pts.length - 1; i >= 0; i--) {
+    const p = pts[i];
+    while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], p) <= 0) {
+      upper.pop();
+    }
+    upper.push(p);
+  }
+  upper.pop();
+  lower.pop();
+  return lower.concat(upper);
+}
+
+function buildHighlightShapes(rects: Rect[]): HighlightShape[] {
+  return groupOverlappingRects(rects).map((group) => {
+    if (group.length === 1) {
+      return { cutouts: group, outline: rectCorners(group[0]) };
+    }
+    const hull = convexHull(group.flatMap(rectCorners));
+    return { cutouts: group, outline: hull };
+  });
+}
+
+function perimeterPointOnPolygon(t: number, vertices: Point[]): Point {
+  if (vertices.length === 0) return [0, 0];
+  if (vertices.length === 1) return vertices[0];
+
+  const segments: { len: number; from: Point; to: Point }[] = [];
+  let total = 0;
+  for (let i = 0; i < vertices.length; i++) {
+    const from = vertices[i];
+    const to = vertices[(i + 1) % vertices.length];
+    const len = Math.hypot(to[0] - from[0], to[1] - from[1]);
+    segments.push({ len, from, to });
+    total += len;
+  }
+
+  let d = (((t % 1) + 1) % 1) * total;
+  for (const seg of segments) {
+    if (d <= seg.len || seg.len === 0) {
+      const f = seg.len === 0 ? 0 : d / seg.len;
+      return [
+        seg.from[0] + f * (seg.to[0] - seg.from[0]),
+        seg.from[1] + f * (seg.to[1] - seg.from[1]),
+      ];
+    }
+    d -= seg.len;
+  }
+  return vertices[0];
+}
+
+function drawGlowBorder(offCtx: CanvasRenderingContext2D, outline: Point[], headT: number, N: number) {
   offCtx.strokeStyle = "white";
   offCtx.lineWidth = 3;
   offCtx.lineCap = "butt";
 
   for (let i = 0; i < N; i++) {
     const t = i / N;
+    const t2 = (i + 1) / N;
     let dist = Math.abs(t - headT);
     if (dist > 0.5) dist = 1 - dist;
     offCtx.globalAlpha = 0.12 + 0.88 * Math.pow(1 - dist * 2, 2);
-    const [x1, y1] = perimeterPoint(t, rect);
-    const [x2, y2] = perimeterPoint((i + 1) / N, rect);
+    const [x1, y1] = perimeterPointOnPolygon(t, outline);
+    const [x2, y2] = perimeterPointOnPolygon(t2, outline);
     offCtx.beginPath();
     offCtx.moveTo(x1, y1);
     offCtx.lineTo(x2, y2);
@@ -43,12 +139,13 @@ function drawGlowBorder(offCtx: CanvasRenderingContext2D, rect: Rect, headT: num
   offCtx.lineWidth = 5;
   for (let i = 0; i < N; i++) {
     const t = i / N;
+    const t2 = (i + 1) / N;
     let dist = Math.abs(t - headT);
     if (dist > 0.5) dist = 1 - dist;
     if (dist > HOT) continue;
     offCtx.globalAlpha = Math.pow(1 - dist / HOT, 2);
-    const [x1, y1] = perimeterPoint(t, rect);
-    const [x2, y2] = perimeterPoint((i + 1) / N, rect);
+    const [x1, y1] = perimeterPointOnPolygon(t, outline);
+    const [x2, y2] = perimeterPointOnPolygon(t2, outline);
     offCtx.beginPath();
     offCtx.moveTo(x1, y1);
     offCtx.lineTo(x2, y2);
@@ -69,7 +166,7 @@ function PeopleBoxHighlight({
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const stateRef = useRef<{ rects: Rect[]; cW: number; cH: number } | null>(null);
+  const stateRef = useRef<{ shapes: HighlightShape[]; cW: number; cH: number } | null>(null);
 
   useEffect(() => {
     const el = containerRef.current;
@@ -88,7 +185,7 @@ function PeopleBoxHighlight({
         w: bw * scale,
         h: bh * scale,
       }));
-      stateRef.current = { rects, cW, cH };
+      stateRef.current = { shapes: buildHighlightShapes(rects), cW, cH };
     });
     ro.observe(el);
     return () => ro.disconnect();
@@ -104,12 +201,12 @@ function PeopleBoxHighlight({
     const tick = (now: number) => {
       const s = stateRef.current;
       const canvas = canvasRef.current;
-      if (!s || !canvas || s.rects.length === 0) {
+      if (!s || !canvas || s.shapes.length === 0) {
         raf = requestAnimationFrame(tick);
         return;
       }
 
-      const { rects, cW, cH } = s;
+      const { shapes, cW, cH } = s;
       if (off.width !== cW || off.height !== cH) {
         off.width = cW;
         off.height = cH;
@@ -120,8 +217,8 @@ function PeopleBoxHighlight({
       const headT = ((now - origin) % DURATION) / DURATION;
 
       offCtx.clearRect(0, 0, cW, cH);
-      for (const rect of rects) {
-        drawGlowBorder(offCtx, rect, headT, N);
+      for (const shape of shapes) {
+        drawGlowBorder(offCtx, shape.outline, headT, N);
       }
 
       ctx.clearRect(0, 0, cW, cH);
@@ -129,10 +226,12 @@ function PeopleBoxHighlight({
       ctx.fillRect(0, 0, cW, cH);
       ctx.globalCompositeOperation = "destination-out";
       ctx.fillStyle = "black";
-      for (const { x, y, w, h } of rects) {
-        ctx.beginPath();
-        ctx.roundRect(x, y, w, h, 3);
-        ctx.fill();
+      for (const shape of shapes) {
+        for (const { x, y, w, h } of shape.cutouts) {
+          ctx.beginPath();
+          ctx.roundRect(x, y, w, h, 3);
+          ctx.fill();
+        }
       }
       ctx.globalCompositeOperation = "source-over";
 
