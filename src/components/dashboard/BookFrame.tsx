@@ -12,7 +12,14 @@ import {
 import { createPortal } from "react-dom";
 import Button from "./Button";
 
-const PLACEHOLDER = "/dashboard/photo-1.png";
+export type CoverImage = {
+  url: string;
+  bbox: [number, number, number, number] | null;
+  imageWidth: number | null;
+  imageHeight: number | null;
+};
+
+const PLACEHOLDER: CoverImage = { url: "/dashboard/photo-1.png", bbox: null, imageWidth: null, imageHeight: null };
 
 const FLY_DURATION_MS = 450;
 const FLY_EASING = "cubic-bezier(0.4, 0, 0.2, 1)";
@@ -21,7 +28,7 @@ type BookFrameProps = {
   className?: string;
   title?: string;
   dateRange?: string;
-  coverImages?: string[];
+  coverImages?: CoverImage[];
 };
 
 function centerTransform(rect: DOMRect) {
@@ -244,7 +251,54 @@ export default function BookFrame({
   );
 }
 
-const BookCover = forwardRef<HTMLDivElement, { coverImages: string[] }>(
+function CroppedPhoto({ image }: { image: CoverImage }) {
+  const { url, bbox, imageWidth: iW, imageHeight: iH } = image;
+
+  if (!bbox || !iW || !iH) {
+    return <Image src={url} alt="" fill className="object-cover" sizes="200px" unoptimized />;
+  }
+
+  const [bx, by, bw, bh] = bbox;
+
+  // Pad 30% around the bbox for context
+  const padX = bw * 0.3;
+  const padY = bh * 0.3;
+  const rx = Math.max(0, bx - padX);
+  const ry = Math.max(0, by - padY);
+  const rw = Math.min(iW - rx, bw + 2 * padX);
+  const rh = Math.min(iH - ry, bh + 2 * padY);
+
+  // Cover: scale so the shorter bbox dimension fills the square container
+  const minSide = Math.min(rw, rh);
+
+  // background-size as % of container (square, so same base for both axes)
+  const bgSizeX = (iW / minSide) * 100;
+  const bgSizeY = (iH / minSide) * 100;
+
+  // CSS background-position %: position = (container - bgSize) * pct/100
+  // Derive pct from desired pixel offset so the region is centered.
+  const xNum = -rx + (minSide - rw) / 2;
+  const xDen = minSide - iW;
+  const bgX = xDen !== 0 ? (xNum / xDen) * 100 : 50;
+
+  const yNum = -ry + (minSide - rh) / 2;
+  const yDen = minSide - iH;
+  const bgY = yDen !== 0 ? (yNum / yDen) * 100 : 50;
+
+  return (
+    <div
+      className="absolute inset-0"
+      style={{
+        backgroundImage: `url(${url})`,
+        backgroundSize: `${bgSizeX.toFixed(3)}% ${bgSizeY.toFixed(3)}%`,
+        backgroundPosition: `${bgX.toFixed(3)}% ${bgY.toFixed(3)}%`,
+        backgroundRepeat: "no-repeat",
+      }}
+    />
+  );
+}
+
+const BookCover = forwardRef<HTMLDivElement, { coverImages: CoverImage[] }>(
   function BookCover({ coverImages }, ref) {
     const img = (i: number) => coverImages[i] ?? coverImages[0] ?? PLACEHOLDER;
     return (
@@ -262,18 +316,18 @@ const BookCover = forwardRef<HTMLDivElement, { coverImages: string[] }>(
           </div>
           <div className="relative grid h-full w-full place-items-center p-12 group-hover:scale-95">
             <div className="absolute top-1/2 left-1/2 z-1 w-[70%] -translate-x-1/2 -translate-y-1/2 bg-white p-3 pb-12 shadow-sm transition-transform duration-300">
-              <div className="relative aspect-square w-full bg-gray-100">
-                <Image src={img(0)} alt="" fill className="object-cover" sizes="200px" unoptimized />
+              <div className="relative aspect-square w-full overflow-hidden bg-gray-100">
+                <CroppedPhoto image={img(0)} />
               </div>
             </div>
             <div className="absolute top-1/2 left-1/2 z-3 w-[70%] -translate-x-1/2 -translate-y-1/2 bg-white p-3 pb-12 shadow-sm transition-transform duration-300 group-hover:-translate-x-[calc(50%-24px)] group-hover:rotate-4">
-              <div className="relative aspect-square w-full bg-gray-100">
-                <Image src={img(1)} alt="" fill className="object-cover" sizes="200px" unoptimized />
+              <div className="relative aspect-square w-full overflow-hidden bg-gray-100">
+                <CroppedPhoto image={img(1)} />
               </div>
             </div>
             <div className="absolute top-1/2 left-1/2 w-[70%] -translate-x-1/2 -translate-y-1/2 bg-white p-3 pb-12 shadow-sm transition-transform duration-300 group-hover:-translate-x-[calc(50%+24px)] group-hover:-rotate-4">
-              <div className="relative aspect-square w-full bg-gray-100">
-                <Image src={img(2)} alt="" fill className="object-cover" sizes="200px" unoptimized />
+              <div className="relative aspect-square w-full overflow-hidden bg-gray-100">
+                <CroppedPhoto image={img(2)} />
               </div>
             </div>
           </div>

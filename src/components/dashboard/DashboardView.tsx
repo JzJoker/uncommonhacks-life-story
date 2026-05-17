@@ -6,11 +6,13 @@ import InviteContributorsButton from "@/components/dashboard/InviteContributorsB
 import { SignOutButton } from "@/components/SignOutButton";
 import { supabase } from "@/lib/supabase";
 
+import type { CoverImage } from "@/components/dashboard/BookFrame";
+
 type PersonBook = {
   id: string;
   name: string;
   relation: string | null;
-  imageUrls: string[];
+  coverImages: CoverImage[];
 };
 
 async function fetchBooks(patientId: string): Promise<PersonBook[]> {
@@ -21,8 +23,14 @@ async function fetchBooks(patientId: string): Promise<PersonBook[]> {
       name,
       relation,
       memory_people (
+        bbox_x,
+        bbox_y,
+        bbox_w,
+        bbox_h,
         memories (
-          image_url
+          image_url,
+          image_width,
+          image_height
         )
       )
     `)
@@ -36,9 +44,17 @@ async function fetchBooks(patientId: string): Promise<PersonBook[]> {
     name: person.name,
     relation: person.relation,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    imageUrls: (person.memory_people as any[])
-      .map((mp) => mp.memories?.image_url)
-      .filter(Boolean) as string[],
+    coverImages: (person.memory_people as any[])
+      .filter((mp) => mp.memories?.image_url)
+      .map((mp) => ({
+        url: mp.memories.image_url as string,
+        bbox:
+          mp.bbox_x != null
+            ? ([mp.bbox_x, mp.bbox_y, mp.bbox_w, mp.bbox_h] as [number, number, number, number])
+            : null,
+        imageWidth: (mp.memories.image_width as number) ?? null,
+        imageHeight: (mp.memories.image_height as number) ?? null,
+      })),
   }));
 }
 
@@ -92,7 +108,7 @@ export default async function DashboardView({
               key={book.id}
               title={book.name}
               dateRange={book.relation ?? ""}
-              coverImages={book.imageUrls}
+              coverImages={book.coverImages}
             />
           ))
         )}
