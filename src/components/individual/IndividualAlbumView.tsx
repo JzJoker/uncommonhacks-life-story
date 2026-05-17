@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { motion, type Variants } from "framer-motion";
 import Button from "@/components/dashboard/Button";
 import PhotoCard from "@/components/individual/PhotoCard";
+import { speak, stopSpeaking } from "@/lib/speak";
 
 export type PhotoCardData = {
   id: string;
@@ -126,6 +127,13 @@ export default function IndividualAlbumView({
     const timer = setTimeout(completeFlip, FLIP_MS);
     return () => clearTimeout(timer);
   }, [isAnimating, completeFlip]);
+
+  // Narrate the person's bio on entry and whenever the person changes.
+  useEffect(() => {
+    const line = `${personName}. ${personBio}`;
+    speak(line).catch((err) => console.error("[Album] TTS failed", err));
+    return () => stopSpeaking();
+  }, [personName, personBio]);
 
   if (!featured) return null;
 
