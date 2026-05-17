@@ -260,9 +260,9 @@ function CroppedPhoto({ image }: { image: CoverImage }) {
 
   const [bx, by, bw, bh] = bbox;
 
-  // Pad 30% around the bbox for context
-  const padX = bw * 0.3;
-  const padY = bh * 0.3;
+  // Pad 10% around the bbox for context
+  const padX = bw * 0.1;
+  const padY = bh * 0.1;
   const rx = Math.max(0, bx - padX);
   const ry = Math.max(0, by - padY);
   const rw = Math.min(iW - rx, bw + 2 * padX);
@@ -281,7 +281,10 @@ function CroppedPhoto({ image }: { image: CoverImage }) {
   const xDen = minSide - iW;
   const bgX = xDen !== 0 ? (xNum / xDen) * 100 : 50;
 
-  const yNum = -ry + (minSide - rh) / 2;
+  // For portrait bboxes (taller than wide) anchor to the top to show the face.
+  // For landscape/square, center vertically as usual.
+  const yOffset = rh > rw ? 0 : (minSide - rh) / 2;
+  const yNum = -ry + yOffset;
   const yDen = minSide - iH;
   const bgY = yDen !== 0 ? (yNum / yDen) * 100 : 50;
 
