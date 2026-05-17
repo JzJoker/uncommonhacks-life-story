@@ -15,12 +15,20 @@ type FlowState =
   | "empty"
   | "analyzing"
   | "identifying"
+  | "relation"
   | "confirm"
   | "drawing"
   | "questionnaire"
   | "narrating"
   | "modifying"
   | "done";
+
+const RELATION_OPTIONS: { group: string; options: string[] }[] = [
+  { group: "Family", options: ["Spouse / Partner", "Parent", "Child", "Sibling", "Grandparent", "Grandchild", "Aunt / Uncle", "Niece / Nephew", "Cousin", "In-law"] },
+  { group: "Friends", options: ["Close Friend", "Friend", "Childhood Friend", "Neighbor"] },
+  { group: "Professional", options: ["Coworker / Colleague", "Doctor / Caregiver", "Mentor"] },
+  { group: "Other", options: ["Acquaintance", "Other"] },
+];
 
 function getQuestions(name: string) {
   return [
@@ -37,7 +45,7 @@ function sortByX(boxes: PersonBox[]): PersonBox[] {
   );
 }
 
-function getMessage(state: FlowState, idx: number, total: number, patientName: string): string {
+function getMessage(state: FlowState, idx: number, total: number, patientName: string, currentPersonName?: string): string {
   const questions = getQuestions(patientName);
   switch (state) {
     case "empty":         return "Ready for memory upload. Please upload an image for cataloging.";
@@ -46,6 +54,7 @@ function getMessage(state: FlowState, idx: number, total: number, patientName: s
       if (total === 0) return "Who is this person?";
       if (total === 1) return "I found 1 person in this photo. Who is this?";
       return `Person ${idx + 1} of ${total} — who is this?`;
+    case "relation":      return `How is ${currentPersonName || "this person"} related to ${patientName}?`;
     case "confirm":       return "Did I miss anyone?";
     case "drawing":       return "Draw a box around the person I missed.";
     case "questionnaire": return questions[idx];
@@ -65,6 +74,7 @@ export function NewMemoryForm({ patientId, patientName }: { patientId: string; p
   const [sortedBoxes, setSortedBoxes] = useState<PersonBox[]>([]);
   const [personIndex, setPersonIndex] = useState(0);
   const [personNames, setPersonNames] = useState<string[]>([]);
+  const [personRelations, setPersonRelations] = useState<string[]>([]);
   const [questionIndex, setQuestionIndex] = useState(0);
   const [questionAnswers, setQuestionAnswers] = useState<string[]>([]);
   const [isSaving, setIsSaving] = useState(false);
@@ -97,6 +107,7 @@ export function NewMemoryForm({ patientId, patientName }: { patientId: string; p
     setSortedBoxes([]);
     setPersonIndex(0);
     setPersonNames([]);
+    setPersonRelations([]);
     setQuestionIndex(0);
     setQuestionAnswers([]);
   };
@@ -107,8 +118,14 @@ export function NewMemoryForm({ patientId, patientName }: { patientId: string; p
       setExistingPeople((prev) => [...prev, trimmed].sort());
     }
     setPersonNames((prev) => { const next = [...prev]; next[personIndex] = name; return next; });
+    setFlowState("relation");
+  };
+
+  const advanceRelation = (relation: string) => {
+    setPersonRelations((prev) => { const next = [...prev]; next[personIndex] = relation; return next; });
     if (personIndex < sortedBoxes.length - 1) {
       setPersonIndex((i) => i + 1);
+      setFlowState("identifying");
     } else {
       setFlowState("confirm");
     }
@@ -131,6 +148,7 @@ export function NewMemoryForm({ patientId, patientName }: { patientId: string; p
     setSortedBoxes([]);
     setPersonIndex(0);
     setPersonNames([]);
+    setPersonRelations([]);
     setQuestionIndex(0);
     setQuestionAnswers([]);
   }, []);
@@ -141,6 +159,7 @@ export function NewMemoryForm({ patientId, patientName }: { patientId: string; p
     try {
       const people = sortedBoxes.map((box, i) => ({
         name: personNames[i] ?? "",
+        relation: personRelations[i] ?? null,
         bbox: box.bbox,
         score: box.score,
       }));
@@ -158,7 +177,7 @@ export function NewMemoryForm({ patientId, patientName }: { patientId: string; p
     } finally {
       setIsSaving(false);
     }
-  }, [patientId, imageFile, naturalSize, sortedBoxes, personNames, questionAnswers]);
+  }, [patientId, imageFile, naturalSize, sortedBoxes, personNames, personRelations, questionAnswers]);
 
   const handleBoxDrawn = useCallback(
     (bbox: [number, number, number, number]) => {
@@ -202,12 +221,15 @@ export function NewMemoryForm({ patientId, patientName }: { patientId: string; p
             flowState === "questionnaire" ? questionIndex : personIndex,
             sortedBoxes.length,
             patientName,
+            personNames[personIndex],
           )}
           actions={
             <Actions
               state={flowState}
               onNameSave={advance}
               onSkip={() => advance("")}
+              onRelationSave={advanceRelation}
+              onRelationSkip={() => advanceRelation("")}
               setFlowState={setFlowState}
               narratingMessage={getMessage("narrating", 0, 0, patientName)}
               onAddMore={handleReset}
@@ -438,12 +460,14 @@ function DrawingOverlay({ naturalSize, onBoxDrawn }: { naturalSize: { w: number;
 /* -------------------------------------------------------------------------- */
 
 function Actions({
-  state, onNameSave, onSkip, setFlowState, narratingMessage,
+  state, onNameSave, onSkip, onRelationSave, onRelationSkip, setFlowState, narratingMessage,
   onAddMore, onViewLifeStory, onNextQuestion, isLastQuestion, onSave, isSaving, existingPeople,
 }: {
   state: FlowState;
   onNameSave: (name: string) => void;
   onSkip: () => void;
+  onRelationSave: (relation: string) => void;
+  onRelationSkip: () => void;
   setFlowState: (s: FlowState) => void;
   narratingMessage: string;
   onAddMore: () => void;
@@ -469,6 +493,9 @@ function Actions({
 
     case "identifying":
       return <NameForm onSave={onNameSave} onSkip={onSkip} suggestions={existingPeople} />;
+
+    case "relation":
+      return <RelationForm onSave={onRelationSave} onSkip={onRelationSkip} />;
 
     case "confirm":
       return (
@@ -537,6 +564,30 @@ function NameForm({ onSave, onSkip, suggestions }: { onSave: (name: string) => v
         )}
       </div>
       <Button variant="primary" size="sm" type="submit">Save</Button>
+      <Button variant="default" size="sm" type="button" onClick={onSkip}>Skip</Button>
+    </form>
+  );
+}
+
+function RelationForm({ onSave, onSkip }: { onSave: (relation: string) => void; onSkip: () => void }) {
+  const [relation, setRelation] = useState("");
+  return (
+    <form className="flex gap-2 w-full max-w-sm" onSubmit={(e) => { e.preventDefault(); onSave(relation); setRelation(""); }}>
+      <select
+        value={relation}
+        onChange={(e) => setRelation(e.target.value)}
+        className="flex-1 rounded-[4px] border border-cream-50 bg-paper px-4 py-3 text-base font-light text-ink focus:outline-none focus:border-ink/40 transition-colors appearance-none"
+      >
+        <option value="" disabled>Select relation…</option>
+        {RELATION_OPTIONS.map(({ group, options }) => (
+          <optgroup key={group} label={group}>
+            {options.map((opt) => (
+              <option key={opt} value={opt}>{opt}</option>
+            ))}
+          </optgroup>
+        ))}
+      </select>
+      <Button variant="primary" size="sm" type="submit" disabled={!relation}>Save</Button>
       <Button variant="default" size="sm" type="button" onClick={onSkip}>Skip</Button>
     </form>
   );

@@ -2,6 +2,7 @@ import { supabase } from "./supabase";
 
 type Person = {
   name: string;
+  relation: string | null;
   bbox: [number, number, number, number];
   score: number;
 };
@@ -57,10 +58,16 @@ export async function saveMemory({ patientId, imageFile, naturalSize, people, an
 
       if (existing) {
         friendFamilyId = existing.id;
+        if (person.relation) {
+          await supabase
+            .from("friends_family")
+            .update({ relation: person.relation })
+            .eq("id", existing.id);
+        }
       } else {
         const { data: ff, error: ffError } = await supabase
           .from("friends_family")
-          .insert({ patient_id: patientId, name: person.name.trim() })
+          .insert({ patient_id: patientId, name: person.name.trim(), relation: person.relation || null })
           .select("id")
           .single();
         if (ffError) throw ffError;
