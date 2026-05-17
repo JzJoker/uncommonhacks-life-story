@@ -3,6 +3,8 @@ import { answerInvitesResponse } from "@/lib/answerInvitesResponse";
 import {
   audioMessageAlreadyOffered,
   buildAudioMessageOffer,
+  extractSubstantiveAnswer,
+  isAudioMessageOfferOnly,
   shouldAppendAudioOffer,
   userAffirmsAudioPlayback,
 } from "@/lib/audioMessageOffer";
@@ -485,14 +487,13 @@ export async function POST(req: NextRequest) {
   if (hasAudioMessage && attribution) {
     systemSuffix +=
       ` This photo has a personal audio message recorded by ${attribution}.` +
-      " CONVERSATION FLOW — follow in order:" +
-      " (1) Answer the patient's current question fully first. Look up facts and point out people in the photo when helpful, without describing any technical steps." +
-      " Do not mention the audio message while you are still addressing their question." +
+      " The app will offer that message only when the patient is asking about that person — do not mention, describe, or ask about the audio message in your words." +
+      " Always answer their current question fully in every reply (facts, people in the photo, etc.)." +
+      " Never send a reply that is only about the audio message." +
       (audioAlreadyOffered
-        ? " (2) You have already offered the audio message in this conversation — do not offer it again unless they ask."
-        : " (2) Only after their question is completely answered and any follow-up task is done, ask if they would like to hear the message " +
-          `${attribution} left for them. Call the listen tool with that offer. Do not call play_audio_message until they say yes.`) +
-      " (3) If they agree to hear it, call play_audio_message. If they decline, acknowledge warmly.";
+        ? " They were already offered the message earlier in this conversation."
+        : " After you answer, the app will ask if they want to hear it; call the listen tool only when you need their yes/no on something else you asked.") +
+      " If they say yes to hearing the message, call play_audio_message. If they decline, acknowledge warmly.";
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -520,6 +521,7 @@ export async function POST(req: NextRequest) {
   let audioUrlData: string | null = null;
   let shouldListenData = false;
   let assistantPrompt = "";
+  let substantiveReply = "";
   let askedQuestion = false;
   let iterations = 0;
 
@@ -558,6 +560,15 @@ export async function POST(req: NextRequest) {
     if (msg.content?.trim()) {
       const content = msg.content.trim();
       assistantPrompt = content;
+      const body = extractSubstantiveAnswer(content, attribution);
+      if (
+        body &&
+        !isListeningMetaMessage(body) &&
+        !isAudioMessageOfferOnly(body, attribution) &&
+        body.length >= substantiveReply.length
+      ) {
+        substantiveReply = body;
+      }
       if (!isListeningMetaMessage(content) && answerInvitesResponse(content)) {
         askedQuestion = true;
       }
@@ -576,6 +587,20 @@ export async function POST(req: NextRequest) {
         // Keep the substantive reply when the final turn is only meta or a short follow-up.
         answer = assistantPrompt;
       }
+      if (
+        attribution &&
+        isAudioMessageOfferOnly(answer, attribution) &&
+        substantiveReply
+      ) {
+        answer = substantiveReply;
+      } else if (!answer.trim() && substantiveReply) {
+        answer = substantiveReply;
+      } else {
+        const body = extractSubstantiveAnswer(answer, attribution);
+        if (body && isAudioMessageOfferOnly(answer, attribution)) {
+          answer = body;
+        }
+      }
       const invitesResponse = answerInvitesResponse(answer);
       if (
         shouldAppendAudioOffer(
@@ -585,6 +610,7 @@ export async function POST(req: NextRequest) {
           attribution,
           question,
           invitesResponse,
+          highlightData.map((h) => h.name),
         )
       ) {
         const offer = buildAudioMessageOffer(attribution!);

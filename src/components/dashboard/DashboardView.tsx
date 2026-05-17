@@ -79,28 +79,59 @@ export default async function DashboardView({
                 {patientName}&apos;s Life
               </h1>
               <p className="text-2xl font-light leading-normal text-muted">
-                1999 - Present
+                1949 - Present
               </p>
             </div>
           </div>
           <div className="flex items-center gap-4">
             <InviteContributorsButton patientId={patientId} />
-            <Button text="Add Memory" href={`/patient/${patientId}/new-memory`} />
-            <SignOutButton />
+            <Button text="Add Memory" variant="primary" href={`/patient/${patientId}/new-memory`} />
+            {/* <SignOutButton /> */}
           </div>
         </header>
       }
     >
-      <section className="flex w-max gap-12 px-32">
+      <section className="flex w-full gap-12 px-32">
         {books.length === 0 ? (
-          <div className="self-center flex flex-col gap-4 items-start">
-            <p className="font-light text-muted">No memories yet.</p>
-            <Link href={`/patient/${patientId}/new-memory`}>
-              <button className="text-sm font-light text-ink underline underline-offset-2">
-                Add the first memory →
-              </button>
-            </Link>
+        <div className="self-center w-full  h-full flex flex-col  mb-12 items-center justify-center">
+        <div className="relative flex-none -skew-x-1 w-[360px] scale-80 cursor-pointer transition-transform duration-300 ">
+          <div className="relative z-10 z-40 flex h-[507px] w-full items-start overflow-hidden rounded-r-3xl bg-gray-200">
+            <div className="relative z-30 h-full w-10 bg-black/10">
+              <div className="pointer-events-none absolute inset-0 flex justify-between">
+                {Array.from({ length: 12 }).map((_, i) => (
+                  <div key={i} className="h-full w-px bg-white/10" />
+                ))}
+              </div>
+            </div>
+            <div className="relative grid h-full w-full place-items-center p-12 group-hover:scale-95">
+              <div className="absolute top-1/2 left-1/2 z-3 w-[70%] -translate-x-1/2 -translate-y-1/2 bg-white p-3 pb-12 shadow-sm transition-transform duration-300 group-hover:-translate-x-[calc(50%-24px)] group-hover:rotate-4">
+                <div className="relative aspect-square w-full  grid place-items-center overflow-hidden bg-gray-100">
+                  <div className="w-[120px] aspect-square bg-white z-20  rounded-full relative" />
+                  <div className="w-[130px] aspect-square bg-white z-20 absolute bottom-0 left-1/2 -translate-x-1/2  translate-y-1/2 rounded-t-full " />
+                </div>
+              </div>
+            </div>
           </div>
+          <div>
+            {Array.from({ length: 8 }, (_, i) => i + 1).map((d, i) => (
+              <div
+                key={d}
+                className="absolute inset-0 rounded-r-3xl border border-l-0 border-black/20 bg-white"
+                style={{
+                  transform: `translate(${i * 2}px, ${i * 2}px)`,
+                  zIndex: 24 - i,
+                }}
+              />
+            ))}
+          </div>
+        </div>
+        <Link href={`/patient/${patientId}/new-memory`}>
+          <Button variant="primary" className="cursor-pointer flex gap-1">
+            <span>Add {patientName}&apos;s </span>
+            <span className="font-hand text-[24px] ">first memory</span>
+          </Button>
+        </Link>
+      </div>
         ) : (
           books.map((book) => (
             <BookFrame

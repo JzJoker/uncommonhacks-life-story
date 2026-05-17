@@ -318,14 +318,14 @@ export default function PhotoCard({
               onPause={() => setPlaying(false)}
               onEnded={() => setPlaying(false)}
             />
-            <button
+            {/* <button
               type="button"
               onClick={toggle}
               aria-label={playing ? "Pause message" : "Play message"}
               className="absolute bottom-2 right-2 z-20 flex h-10 w-10 items-center justify-center rounded-full bg-black/60 text-white backdrop-blur-sm transition-transform hover:scale-110 active:scale-95"
             >
               {playing ? <Pause size={18} fill="white" /> : <Play size={18} fill="white" />}
-            </button>
+            </button> */}
           </>
         )}
       </div>
