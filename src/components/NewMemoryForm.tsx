@@ -2,11 +2,12 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Sparkle } from "lucide-react";
+import { Mic, Square, Sparkle } from "lucide-react";
 import { AgentPanel } from "@/components/AgentPanel";
 import { Button } from "@/components/Button";
 import { ImageUpload } from "@/components/ImageUpload";
 import { Input } from "@/components/Input";
+import { useAudioRecorder } from "@/hooks/useAudioRecorder";
 import { usePersonDetection, type PersonBox } from "@/hooks/usePersonDetection";
 import { saveMemory } from "@/lib/saveMemory";
 import { supabase } from "@/lib/supabase";
@@ -19,6 +20,8 @@ type FlowState =
   | "confirm"
   | "drawing"
   | "questionnaire"
+  | "narration-record"
+  | "message-record"
   | "narrating"
   | "modifying"
   | "done";
@@ -65,6 +68,8 @@ function getMessage(state: FlowState, idx: number, total: number, patientName: s
     case "confirm":       return "Did I miss anyone?";
     case "drawing":       return "Draw a box around the person I missed.";
     case "questionnaire": return questions[idx];
+    case "narration-record": return "Record a narration for this photo — introduce the people and describe what's happening.";
+    case "message-record":   return `Leave a personal message for ${patientName} — something warm they'll hear whenever they view this memory.`;
     case "narrating":
       return `This is Justin, your grandson. In this photo you are standing next to him at the boardwalk. You used to take him to go rollerblading and he remembers laughing whenever he sped past you!`;
     case "modifying":     return "Edit the story for this memory.";
@@ -85,6 +90,8 @@ export function NewMemoryForm({ patientId, patientName }: { patientId: string; p
   const [questionIndex, setQuestionIndex] = useState(0);
   const [questionAnswers, setQuestionAnswers] = useState<string[]>([]);
   const [isSaving, setIsSaving] = useState(false);
+  const [narrationBlob, setNarrationBlob] = useState<Blob | null>(null);
+  const [messageBlob, setMessageBlob] = useState<Blob | null>(null);
   const [existingPeople, setExistingPeople] = useState<string[]>([]);
 
   useEffect(() => {
@@ -143,7 +150,7 @@ export function NewMemoryForm({ patientId, patientName }: { patientId: string; p
     if (questionIndex < questions.length - 1) {
       setQuestionIndex((i) => i + 1);
     } else {
-      setFlowState("narrating");
+      setFlowState("narration-record");
     }
   }, [questionIndex, questions.length]);
 
@@ -158,6 +165,8 @@ export function NewMemoryForm({ patientId, patientName }: { patientId: string; p
     setPersonRelations([]);
     setQuestionIndex(0);
     setQuestionAnswers([]);
+    setNarrationBlob(null);
+    setMessageBlob(null);
   }, []);
 
   const handleSave = useCallback(async () => {
@@ -176,7 +185,7 @@ export function NewMemoryForm({ patientId, patientName }: { patientId: string; p
         questionAnswers[2] ?? "",
         questionAnswers[3] ?? "",
       ];
-      await saveMemory({ patientId, imageFile, naturalSize, people, answers });
+      await saveMemory({ patientId, imageFile, naturalSize, people, answers, narrationBlob, messageBlob });
       setFlowState("done");
     } catch (err) {
       console.error(err);
@@ -184,7 +193,7 @@ export function NewMemoryForm({ patientId, patientName }: { patientId: string; p
     } finally {
       setIsSaving(false);
     }
-  }, [patientId, imageFile, naturalSize, sortedBoxes, personNames, personRelations, questionAnswers]);
+  }, [patientId, imageFile, naturalSize, sortedBoxes, personNames, personRelations, questionAnswers, narrationBlob, messageBlob]);
 
   const handleBoxDrawn = useCallback(
     (bbox: [number, number, number, number]) => {
@@ -243,6 +252,10 @@ export function NewMemoryForm({ patientId, patientName }: { patientId: string; p
               onViewLifeStory={() => router.push(`/patient/${patientId}`)}
               onNextQuestion={advanceQuestion}
               isLastQuestion={questionIndex === questions.length - 1}
+              onNarrationSave={(blob) => { setNarrationBlob(blob); setFlowState("message-record"); }}
+              onNarrationSkip={() => setFlowState("message-record")}
+              onMessageSave={(blob) => { setMessageBlob(blob); setFlowState("narrating"); }}
+              onMessageSkip={() => setFlowState("narrating")}
               onSave={handleSave}
               isSaving={isSaving}
               existingPeople={existingPeople}
@@ -468,7 +481,9 @@ function DrawingOverlay({ naturalSize, onBoxDrawn }: { naturalSize: { w: number;
 
 function Actions({
   state, onNameSave, onSkip, onRelationSave, onRelationSkip, setFlowState, narratingMessage,
-  onAddMore, onViewLifeStory, onNextQuestion, isLastQuestion, onSave, isSaving, existingPeople,
+  onAddMore, onViewLifeStory, onNextQuestion, isLastQuestion,
+  onNarrationSave, onNarrationSkip, onMessageSave, onMessageSkip,
+  onSave, isSaving, existingPeople,
 }: {
   state: FlowState;
   onNameSave: (name: string) => void;
@@ -481,6 +496,10 @@ function Actions({
   onViewLifeStory: () => void;
   onNextQuestion: (answer: string) => void;
   isLastQuestion: boolean;
+  onNarrationSave: (blob: Blob) => void;
+  onNarrationSkip: () => void;
+  onMessageSave: (blob: Blob) => void;
+  onMessageSkip: () => void;
   onSave: () => void;
   isSaving: boolean;
   existingPeople: string[];
@@ -519,6 +538,12 @@ function Actions({
 
     case "questionnaire":
       return <QuestionForm onNext={onNextQuestion} isLast={isLastQuestion} />;
+
+    case "narration-record":
+      return <RecordForm onSave={onNarrationSave} onSkip={onNarrationSkip} />;
+
+    case "message-record":
+      return <RecordForm onSave={onMessageSave} onSkip={onMessageSkip} />;
 
     case "narrating":
       return (
@@ -611,6 +636,45 @@ function QuestionForm({ onNext, isLast }: { onNext: (answer: string) => void; is
         <Button variant="default" size="sm" type="button" className="uppercase tracking-[0.18em]" onClick={() => { onNext(""); setAnswer(""); }}>Skip</Button>
       </div>
     </form>
+  );
+}
+
+function RecordForm({ onSave, onSkip }: { onSave: (blob: Blob) => void; onSkip: () => void }) {
+  const { state, audioBlob, audioUrl, start, stop, reset } = useAudioRecorder();
+
+  return (
+    <div className="flex flex-col gap-3 w-full max-w-sm">
+      {state === "idle" && (
+        <div className="flex gap-2">
+          <Button variant="primary" size="sm" type="button" onClick={start}>
+            <Mic size={14} className="mr-1.5 inline-block" />Record
+          </Button>
+          <Button variant="default" size="sm" type="button" onClick={onSkip}>Skip</Button>
+        </div>
+      )}
+
+      {state === "recording" && (
+        <div className="flex items-center gap-3">
+          <span className="inline-block w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+          <span className="text-sm font-light text-muted">Recording…</span>
+          <Button variant="default" size="sm" type="button" onClick={stop}>
+            <Square size={12} className="mr-1.5 inline-block" />Stop
+          </Button>
+        </div>
+      )}
+
+      {state === "recorded" && audioUrl && audioBlob && (
+        <div className="flex flex-col gap-2 w-full">
+          {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+          <audio src={audioUrl} controls className="w-full h-9 rounded-[4px]" />
+          <div className="flex gap-2">
+            <Button variant="primary" size="sm" type="button" onClick={() => onSave(audioBlob)}>Save</Button>
+            <Button variant="default" size="sm" type="button" onClick={reset}>Re-record</Button>
+            <Button variant="default" size="sm" type="button" onClick={onSkip}>Skip</Button>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 

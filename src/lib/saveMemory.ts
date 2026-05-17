@@ -13,9 +13,19 @@ type SaveMemoryArgs = {
   naturalSize: { w: number; h: number };
   people: Person[];
   answers: [string, string, string, string];
+  narrationBlob?: Blob | null;
+  messageBlob?: Blob | null;
 };
 
-export async function saveMemory({ patientId, imageFile, naturalSize, people, answers }: SaveMemoryArgs) {
+async function uploadAudio(blob: Blob, prefix: string): Promise<string | null> {
+  const { data, error } = await supabase.storage
+    .from("memories")
+    .upload(`audio/${prefix}_${Date.now()}.webm`, blob, { contentType: "audio/webm", upsert: false });
+  if (error || !data) return null;
+  return supabase.storage.from("memories").getPublicUrl(data.path).data.publicUrl;
+}
+
+export async function saveMemory({ patientId, imageFile, naturalSize, people, answers, narrationBlob, messageBlob }: SaveMemoryArgs) {
   // 1. Upload image to Storage
   const filename = `${Date.now()}_${imageFile.name.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
   const { data: storageData, error: storageError } = await supabase.storage
@@ -26,6 +36,12 @@ export async function saveMemory({ patientId, imageFile, naturalSize, people, an
   const { data: { publicUrl } } = supabase.storage
     .from("memories")
     .getPublicUrl(storageData.path);
+
+  // Upload audio recordings in parallel
+  const [narrationAudioUrl, messageAudioUrl] = await Promise.all([
+    narrationBlob ? uploadAudio(narrationBlob, "narration") : Promise.resolve(null),
+    messageBlob   ? uploadAudio(messageBlob,   "message")   : Promise.resolve(null),
+  ]);
 
   // 2. Insert memory record
   const { data: memory, error: memError } = await supabase
@@ -39,6 +55,8 @@ export async function saveMemory({ patientId, imageFile, naturalSize, people, an
       answer_whats_going_on: answers[1] || null,
       answer_recognize:      answers[2] || null,
       answer_upset:          answers[3] || null,
+      narration_audio_url:   narrationAudioUrl,
+      message_audio_url:     messageAudioUrl,
     })
     .select("id")
     .single();
