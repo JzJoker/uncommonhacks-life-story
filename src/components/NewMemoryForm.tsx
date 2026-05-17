@@ -540,10 +540,10 @@ function Actions({
       return <QuestionForm onNext={onNextQuestion} isLast={isLastQuestion} />;
 
     case "narration-record":
-      return <RecordForm onSave={onNarrationSave} onSkip={onNarrationSkip} />;
+      return <RecordForm key="narration" onSave={onNarrationSave} onSkip={onNarrationSkip} />;
 
     case "message-record":
-      return <RecordForm onSave={onMessageSave} onSkip={onMessageSkip} />;
+      return <RecordForm key="message" onSave={onMessageSave} onSkip={onMessageSkip} />;
 
     case "narrating":
       return (
