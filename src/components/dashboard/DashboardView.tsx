@@ -1,6 +1,7 @@
 import BookFrame from "@/components/dashboard/BookFrame";
 import Button from "@/components/dashboard/Button";
 import HorizontalScroll from "@/components/dashboard/HorizontalScroll";
+import InviteContributorsButton from "@/components/dashboard/InviteContributorsButton";
 
 const books = [
   {
@@ -42,7 +43,10 @@ export default function DashboardView() {
               </p>
             </div>
           </div>
-          <Button text="Profile" />
+          <div className="flex items-center gap-3">
+            <InviteContributorsButton />
+            <Button text="Profile" />
+          </div>
         </header>
       }
     >
