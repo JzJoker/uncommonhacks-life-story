@@ -10,6 +10,7 @@ export default function AuthCallbackPage() {
 
   useEffect(() => {
     const code = searchParams.get("code");
+    const patientId = searchParams.get("patientId");
     if (!code) { router.replace("/signin"); return; }
 
     supabase.auth.exchangeCodeForSession(code).then(async ({ data }) => {
@@ -22,7 +23,7 @@ export default function AuthCallbackPage() {
           .eq("email", user.email)
           .is("contributor_id", null);
       }
-      router.replace("/");
+      router.replace(patientId ? `/patient/${patientId}/new-memory` : "/");
     });
   }, [router, searchParams]);
 

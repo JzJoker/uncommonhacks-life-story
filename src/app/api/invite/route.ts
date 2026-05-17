@@ -9,22 +9,25 @@ export async function POST(req: NextRequest) {
 
   const origin = req.nextUrl.origin;
 
-  // Insert the contributor record (idempotent — ignore conflict on duplicate)
-  const { error: insertError } = await supabaseAdmin
+  // Record the invite for the caregiver's contributors list. Duplicates are
+  // ignored silently — re-inviting the same email is allowed and should still
+  // send a fresh link.
+  await supabaseAdmin
     .from("patient_contributors")
     .upsert({ patient_id: patientId, email }, { onConflict: "patient_id,email", ignoreDuplicates: true });
 
-  if (insertError) {
-    return NextResponse.json({ error: insertError.message }, { status: 500 });
-  }
-
-  // Send the invite email via Supabase Auth
-  const { error: inviteError } = await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
-    redirectTo: `${origin}/auth/callback`,
+  // Send a magic link that drops the recipient straight on the new-memory
+  // view for this patient. Works for any email — no prior account required,
+  // and re-invites don't error out the way inviteUserByEmail does.
+  const { error: linkError } = await supabaseAdmin.auth.signInWithOtp({
+    email,
+    options: {
+      emailRedirectTo: `${origin}/auth/callback?patientId=${patientId}`,
+    },
   });
 
-  if (inviteError) {
-    return NextResponse.json({ error: inviteError.message }, { status: 500 });
+  if (linkError) {
+    return NextResponse.json({ error: linkError.message }, { status: 500 });
   }
 
   return NextResponse.json({ ok: true });

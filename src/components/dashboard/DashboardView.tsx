@@ -68,9 +68,8 @@ export default async function DashboardView({
             </div>
           </div>
           <div className="flex items-center gap-4">
-            <InviteContributorsButton />
+            <InviteContributorsButton patientId={patientId} />
             <Button text="Add Memory" href={`/patient/${patientId}/new-memory`} />
-            <Button text="Manage" href={`/patient/${patientId}/settings`} />
             <SignOutButton />
           </div>
         </header>
