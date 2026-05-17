@@ -24,7 +24,14 @@ type FlowState =
   | "done";
 
 const RELATION_OPTIONS: { group: string; options: string[] }[] = [
-  { group: "Family", options: ["Spouse / Partner", "Parent", "Child", "Sibling", "Grandparent", "Grandchild", "Aunt / Uncle", "Niece / Nephew", "Cousin", "In-law"] },
+  { group: "Spouse & Partner", options: ["Husband", "Wife", "Partner"] },
+  { group: "Children", options: ["Son", "Daughter"] },
+  { group: "Parents", options: ["Mother", "Father"] },
+  { group: "Siblings", options: ["Brother", "Sister"] },
+  { group: "Grandchildren", options: ["Grandson", "Granddaughter"] },
+  { group: "Grandparents", options: ["Grandmother", "Grandfather"] },
+  { group: "In-laws", options: ["Son-in-law", "Daughter-in-law", "Mother-in-law", "Father-in-law", "Brother-in-law", "Sister-in-law"] },
+  { group: "Extended Family", options: ["Aunt", "Uncle", "Niece", "Nephew", "Cousin"] },
   { group: "Friends", options: ["Close Friend", "Friend", "Childhood Friend", "Neighbor"] },
   { group: "Professional", options: ["Coworker / Colleague", "Doctor / Caregiver", "Mentor"] },
   { group: "Other", options: ["Acquaintance", "Other"] },
