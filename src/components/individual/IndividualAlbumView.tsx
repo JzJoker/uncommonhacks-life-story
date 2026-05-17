@@ -280,21 +280,29 @@ export default function IndividualAlbumView({
             : [],
       );
 
-      if (data.audioUrl) {
-        playMessageAudio(data.audioUrl);
-      }
-
       const shouldListen =
         !data.audioUrl &&
         (data.shouldListen || answerInvitesResponse(answer));
       if (shouldListen) {
         setPromptWhileListening(answer);
         setAskMode("listening");
-        // wait for typewriter on the prompt, then start mic
-        setTimeout(startSpeechRecognition, answer.length * 28 + 1000);
       } else {
         setPromptWhileListening("");
         setAskMode("answer");
+      }
+
+      // Vocalize the agent's reply, then chain mic / personal-message audio.
+      const spoken = speak(answer).catch((err) =>
+        console.error("[Album] agent TTS failed", err),
+      );
+      if (data.audioUrl) {
+        void spoken.then(() => playMessageAudio(data.audioUrl!));
+      } else if (shouldListen) {
+        void spoken.then(() => {
+          // Only start mic if we're still in the listening state for this answer.
+          if (recognitionRef.current) return;
+          startSpeechRecognition();
+        });
       }
     } catch {
       setAskAnswer("Something went wrong. Please try again.");
