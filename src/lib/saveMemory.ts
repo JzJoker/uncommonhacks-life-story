@@ -48,13 +48,24 @@ export async function saveMemory({ patientId, imageFile, naturalSize, people, an
     let friendFamilyId: string | null = null;
 
     if (person.name.trim()) {
-      const { data: ff, error: ffError } = await supabase
+      const { data: existing } = await supabase
         .from("friends_family")
-        .insert({ patient_id: patientId, name: person.name.trim() })
         .select("id")
-        .single();
-      if (ffError) throw ffError;
-      friendFamilyId = ff.id;
+        .eq("patient_id", patientId)
+        .eq("name", person.name.trim())
+        .maybeSingle();
+
+      if (existing) {
+        friendFamilyId = existing.id;
+      } else {
+        const { data: ff, error: ffError } = await supabase
+          .from("friends_family")
+          .insert({ patient_id: patientId, name: person.name.trim() })
+          .select("id")
+          .single();
+        if (ffError) throw ffError;
+        friendFamilyId = ff.id;
+      }
     }
 
     const { error: mpError } = await supabase.from("memory_people").insert({

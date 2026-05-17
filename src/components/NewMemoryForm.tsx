@@ -9,6 +9,7 @@ import { ImageUpload } from "@/components/ImageUpload";
 import { Input } from "@/components/Input";
 import { usePersonDetection, type PersonBox } from "@/hooks/usePersonDetection";
 import { saveMemory } from "@/lib/saveMemory";
+import { supabase } from "@/lib/supabase";
 
 type FlowState =
   | "empty"
@@ -67,6 +68,18 @@ export function NewMemoryForm({ patientId, patientName }: { patientId: string; p
   const [questionIndex, setQuestionIndex] = useState(0);
   const [questionAnswers, setQuestionAnswers] = useState<string[]>([]);
   const [isSaving, setIsSaving] = useState(false);
+  const [existingPeople, setExistingPeople] = useState<string[]>([]);
+
+  useEffect(() => {
+    supabase
+      .from("friends_family")
+      .select("name")
+      .eq("patient_id", patientId)
+      .order("name")
+      .then(({ data }) => {
+        if (data) setExistingPeople(data.map((p) => p.name));
+      });
+  }, [patientId]);
 
   const questions = getQuestions(patientName);
   const { boxes, isDetecting } = usePersonDetection(imageUrl);
@@ -89,6 +102,10 @@ export function NewMemoryForm({ patientId, patientName }: { patientId: string; p
   };
 
   const advance = (name: string) => {
+    const trimmed = name.trim();
+    if (trimmed && !existingPeople.includes(trimmed)) {
+      setExistingPeople((prev) => [...prev, trimmed].sort());
+    }
     setPersonNames((prev) => { const next = [...prev]; next[personIndex] = name; return next; });
     if (personIndex < sortedBoxes.length - 1) {
       setPersonIndex((i) => i + 1);
@@ -199,6 +216,7 @@ export function NewMemoryForm({ patientId, patientName }: { patientId: string; p
               isLastQuestion={questionIndex === questions.length - 1}
               onSave={handleSave}
               isSaving={isSaving}
+              existingPeople={existingPeople}
             />
           }
         />
@@ -421,7 +439,7 @@ function DrawingOverlay({ naturalSize, onBoxDrawn }: { naturalSize: { w: number;
 
 function Actions({
   state, onNameSave, onSkip, setFlowState, narratingMessage,
-  onAddMore, onViewLifeStory, onNextQuestion, isLastQuestion, onSave, isSaving,
+  onAddMore, onViewLifeStory, onNextQuestion, isLastQuestion, onSave, isSaving, existingPeople,
 }: {
   state: FlowState;
   onNameSave: (name: string) => void;
@@ -434,6 +452,7 @@ function Actions({
   isLastQuestion: boolean;
   onSave: () => void;
   isSaving: boolean;
+  existingPeople: string[];
 }) {
   switch (state) {
     case "empty":
@@ -449,7 +468,7 @@ function Actions({
       );
 
     case "identifying":
-      return <NameForm onSave={onNameSave} onSkip={onSkip} />;
+      return <NameForm onSave={onNameSave} onSkip={onSkip} suggestions={existingPeople} />;
 
     case "confirm":
       return (
@@ -482,11 +501,41 @@ function Actions({
   }
 }
 
-function NameForm({ onSave, onSkip }: { onSave: (name: string) => void; onSkip: () => void }) {
+function NameForm({ onSave, onSkip, suggestions }: { onSave: (name: string) => void; onSkip: () => void; suggestions: string[] }) {
   const [name, setName] = useState("");
+  const [open, setOpen] = useState(false);
+
+  const filtered = name.trim()
+    ? suggestions.filter((s) => s.toLowerCase().includes(name.toLowerCase()))
+    : [];
+
+  const commit = (value: string) => { onSave(value); setName(""); setOpen(false); };
+
   return (
-    <form className="flex gap-2 w-full max-w-sm" onSubmit={(e) => { e.preventDefault(); onSave(name); setName(""); }}>
-      <Input placeholder="Enter their name" value={name} onChange={(e) => setName(e.target.value)} />
+    <form className="flex gap-2 w-full max-w-sm" onSubmit={(e) => { e.preventDefault(); commit(name); }}>
+      <div className="relative flex-1">
+        <Input
+          placeholder="Enter their name"
+          value={name}
+          onChange={(e) => { setName(e.target.value); setOpen(true); }}
+          onFocus={() => setOpen(true)}
+          onBlur={() => setOpen(false)}
+          autoComplete="off"
+        />
+        {open && filtered.length > 0 && (
+          <ul className="absolute bottom-full mb-1 left-0 right-0 bg-paper border border-cream-100 rounded-[4px] shadow-md z-20 max-h-40 overflow-y-auto">
+            {filtered.map((s) => (
+              <li
+                key={s}
+                className="px-4 py-2 text-sm font-light text-ink cursor-pointer hover:bg-cream-50"
+                onMouseDown={(e) => { e.preventDefault(); commit(s); }}
+              >
+                {s}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
       <Button variant="primary" size="sm" type="submit">Save</Button>
       <Button variant="default" size="sm" type="button" onClick={onSkip}>Skip</Button>
     </form>
