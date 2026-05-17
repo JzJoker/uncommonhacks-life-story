@@ -2,15 +2,21 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { motion, type Variants } from "framer-motion";
+import { Sparkle } from "lucide-react";
 import Button from "@/components/dashboard/Button";
 import PhotoCard from "@/components/individual/PhotoCard";
+import TypewriterText from "@/components/TypewriterText";
 import { speak, stopSpeaking } from "@/lib/speak";
+import type { Highlight } from "@/app/api/ask/route";
 
 export type PhotoCardData = {
   id: string;
   src: string;
   quote: string;
   attribution: string;
+  memoryId: string;
+  imageWidth: number | null;
+  imageHeight: number | null;
   messageAudioUrl?: string | null;
 };
 
@@ -45,18 +51,27 @@ function tiltForIndex(index: number) {
   return ((index * 17) % 5) - 2;
 }
 
+/* -------------------------------------------------------------------------- */
+/* Main view                                                                   */
+/* -------------------------------------------------------------------------- */
+
 type FlipTarget = "grid" | "single";
+type AskMode = "bio" | "listening" | "thinking" | "answer";
 
 type IndividualAlbumViewProps = {
   photoCards: PhotoCardData[];
   personName?: string;
-  personBio?: string;
+  personNarration?: string | null;
+  personId: string;
+  patientId: string;
 };
 
 export default function IndividualAlbumView({
   photoCards,
   personName = "Andy Lin",
-  personBio = "Family members can create a private digital space full of photos, stories, and voices that celebrate Andy\u2019s life and bring him closer to people he loves.",
+  personNarration = null,
+  personId,
+  patientId,
 }: IndividualAlbumViewProps) {
   const total = photoCards.length;
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -67,24 +82,66 @@ export default function IndividualAlbumView({
   const [coverTurningPage, setCoverTurningPage] = useState(false);
   const [flipTarget, setFlipTarget] = useState<FlipTarget>("single");
   const flipTargetRef = useRef<FlipTarget>("single");
+  const [narration, setNarration] = useState<string | null>(personNarration);
+  const [highlight, setHighlight] = useState<Highlight | null>(null);
+
+  // Ask Q&A state
+  const [askMode, setAskMode] = useState<AskMode>("bio");
+  const [askAnswer, setAskAnswer] = useState("");
+  const [askQuestion, setAskQuestion] = useState("");
+  const askHistoryRef = useRef<{ role: string; content: string }[]>([]);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const recognitionRef = useRef<any>(null);
+  const transcriptRef = useRef("");
 
   const featured = photoCards[currentIndex];
+  const currentMemoryId = featured?.memoryId ?? null;
+
   const isPageTurning = isAnimating && isFlipped && !showGrid;
   const hideTurningPage = (showGrid && !isAnimating) || coverTurningPage;
-  // Only hide left photo during 3→1; for 1→3 it stays under the turning page
   const hideLeftPhoto =
     coverTurningPage || (isPageTurning && flipTarget === "single");
   const showLeftSingle = !showGrid && !hideLeftPhoto;
-  // Bio on the turning page only when resting (1) or flipping toward grid (1→3)
   const showBioOnPage =
     flipTarget === "grid" || (!isAnimating && !showGrid && !isFlipped);
+
+  // Reset Q&A and highlight when photo changes
+  useEffect(() => {
+    setHighlight(null);
+    setAskMode("bio");
+    setAskQuestion("");
+    askHistoryRef.current = [];
+    transcriptRef.current = "";
+    recognitionRef.current?.abort?.();
+    recognitionRef.current = null;
+  }, [currentIndex]);
+
+  // Generate narration on first open if not cached
+  useEffect(() => {
+    if (narration !== null) return;
+    fetch("/api/person-narration", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ personId, patientId }),
+    })
+      .then((r) => r.json())
+      .then((d: { narration?: string }) => setNarration(d.narration ?? ""))
+      .catch(() => setNarration(""));
+  }, [narration, personId, patientId]);
+
+  // Narrate on entry once narration is available
+  useEffect(() => {
+    if (!narration) return;
+    const line = `${personName}. ${narration}`;
+    speak(line).catch((err) => console.error("[Album] TTS failed", err));
+    return () => stopSpeaking();
+  }, [personName, narration]);
 
   const completeFlip = useCallback(() => {
     if (flipTargetRef.current === "grid") {
       setShowGrid(true);
       setIsAnimating(false);
     } else {
-      // Forward flip done — snap page closed so bio shows on the right
       setIsAnimating(false);
       setIsFlipped(false);
     }
@@ -110,7 +167,6 @@ export default function IndividualAlbumView({
       setShowGrid(false);
       setIsAnimating(false);
       setIsFlipped(false);
-      // Reset to 0° while covered, then forward turn (same as 1→3)
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
           setIsAnimating(true);
@@ -128,12 +184,61 @@ export default function IndividualAlbumView({
     return () => clearTimeout(timer);
   }, [isAnimating, completeFlip]);
 
-  // Narrate the person's bio on entry and whenever the person changes.
-  useEffect(() => {
-    const line = `${personName}. ${personBio}`;
-    speak(line).catch((err) => console.error("[Album] TTS failed", err));
-    return () => stopSpeaking();
-  }, [personName, personBio]);
+  function enterListening() {
+    setAskMode("listening");
+    setAskQuestion("");
+    transcriptRef.current = "";
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SR) return;
+
+    const recognition = new SR();
+    recognition.continuous = false;
+    recognition.interimResults = true;
+    recognition.lang = "en-US";
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    recognition.onresult = (e: any) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const transcript = Array.from(e.results as any[]).map((r: any) => r[0].transcript).join("");
+      transcriptRef.current = transcript;
+      setAskQuestion(transcript);
+    };
+    recognition.onend = () => {
+      const q = transcriptRef.current;
+      if (q.trim()) void submitQuestion(q);
+    };
+    recognitionRef.current = recognition;
+    try { recognition.start(); } catch { /* mic permission denied or already running */ }
+  }
+
+  async function submitQuestion(question: string) {
+    if (!question.trim()) return;
+    recognitionRef.current?.stop?.();
+    recognitionRef.current = null;
+    setAskMode("thinking");
+    const history = askHistoryRef.current;
+    try {
+      const res = await fetch("/api/ask", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question, personId, patientId, currentMemoryId, history }),
+      });
+      const data: { answer: string; highlight: Highlight | null } = await res.json();
+      const answer = data.answer || "Sorry, I couldn't find that.";
+      askHistoryRef.current = [
+        ...history,
+        { role: "user", content: question },
+        { role: "assistant", content: answer },
+      ];
+      setAskAnswer(answer);
+      setHighlight(data.highlight ?? null);
+      setAskMode("answer");
+    } catch {
+      setAskAnswer("Something went wrong. Please try again.");
+      setAskMode("answer");
+    }
+  }
 
   if (!featured) return null;
 
@@ -143,7 +248,7 @@ export default function IndividualAlbumView({
         className="relative flex min-h-[520px] flex-1 rounded-xl bg-paper"
         style={{ perspective: "1600px" }}
       >
-        {/* Left page — single stays visible under the page during 1→3 */}
+        {/* Left page */}
         <div
           className={`relative flex h-full w-1/2 items-center justify-center overflow-hidden border-r border-cream-150/40 bg-paper p-6 ${
             showGrid ? "z-10" : "z-0"
@@ -159,12 +264,23 @@ export default function IndividualAlbumView({
               animate={{ opacity: 1 }}
               transition={{ duration: 0.35, ease: "easeOut" }}
             >
-              <PhotoCard
-                src={featured.src}
-                quote={featured.quote}
-                attribution={featured.attribution}
-                messageAudioUrl={featured.messageAudioUrl}
-              />
+              <div className="relative">
+                <PhotoCard
+                  src={featured.src}
+                  quote={featured.quote}
+                  attribution={featured.attribution}
+                  messageAudioUrl={featured.messageAudioUrl}
+                  highlight={
+                    highlight && featured.imageWidth && featured.imageHeight
+                      ? {
+                          bbox: [highlight.bbox_x, highlight.bbox_y, highlight.bbox_w, highlight.bbox_h],
+                          imageWidth: highlight.imageWidth,
+                          imageHeight: highlight.imageHeight,
+                        }
+                      : null
+                  }
+                />
+              </div>
             </motion.div>
           )}
 
@@ -172,6 +288,7 @@ export default function IndividualAlbumView({
             <div className="absolute inset-0 z-[1] bg-paper" aria-hidden />
           )}
         </div>
+
         {showGrid && (
           <motion.div
             key={`grid-${gridIndices.join("-")}`}
@@ -206,7 +323,8 @@ export default function IndividualAlbumView({
             })}
           </motion.div>
         )}
-        {/* Right page — blank white spread */}
+
+        {/* Right page */}
         <div className="relative flex h-full w-1/2 flex-col bg-paper">
           <div
             className="h-full w-full border-l border-cream-150/30"
@@ -214,7 +332,7 @@ export default function IndividualAlbumView({
           />
         </div>
 
-        {/* Turning page — forward 0°→-180° for both 1→3 and 3→1 */}
+        {/* Turning page */}
         <motion.div
           className="absolute top-0 right-0 h-full w-1/2 "
           style={{
@@ -240,29 +358,107 @@ export default function IndividualAlbumView({
             }}
           >
             {showBioOnPage ? (
-              <motion.section
-                className="flex max-w-[360px] flex-col items-start justify-center gap-6"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ duration: 0.35, ease: "easeOut" }}
-              >
-                <h2 className="font-hand text-[28px] leading-normal text-ink">
-                  {personName}
-                </h2>
-                <p className="text-base font-light leading-normal text-ink">
-                  {personBio}
-                </p>
-                <p className="text-sm text-muted">{featured.attribution}</p>
-                <div className="flex flex-wrap gap-3">
-                  <Button
-                    text={`See more of ${personName}`}
-                    variant="primary"
-                    onClick={handleSeeMore}
-                    disabled={isAnimating || isFlipped}
+              askMode === "bio" ? (
+                <motion.section
+                  key="bio"
+                  className="flex max-w-[360px] flex-col items-start justify-center gap-6"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ duration: 0.35, ease: "easeOut" }}
+                >
+                  <h2 className="font-hand text-[28px] leading-normal text-ink">
+                    {personName}
+                  </h2>
+                  <p className="text-base font-light leading-normal text-ink">
+                    {narration === null ? (
+                      <em className="text-muted">Generating…</em>
+                    ) : (
+                      narration
+                    )}
+                  </p>
+                  <p className="text-sm text-muted">{featured.attribution}</p>
+                  <div className="flex flex-wrap gap-3">
+                    <Button
+                      text={`See more of ${personName}`}
+                      variant="primary"
+                      onClick={handleSeeMore}
+                      disabled={isAnimating || isFlipped}
+                    />
+                    <Button text="Ask a question" onClick={enterListening} />
+                  </div>
+                </motion.section>
+              ) : askMode === "listening" ? (
+                <motion.div
+                  key="listening"
+                  className="flex max-w-[360px] flex-col items-center gap-6 w-full"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ duration: 0.3, ease: "easeOut" }}
+                >
+                  <motion.div
+                    animate={{ scale: [1, 1.3, 1] }}
+                    transition={{ duration: 1.8, repeat: Infinity, ease: "easeInOut" }}
+                  >
+                    <Sparkle size={40} fill="currentColor" className="text-ink/70" />
+                  </motion.div>
+                  <p className="text-base font-light text-muted">Listening…</p>
+                  <input
+                    type="text"
+                    value={askQuestion}
+                    onChange={(e) => setAskQuestion(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey) {
+                        e.preventDefault();
+                        void submitQuestion(askQuestion);
+                      }
+                    }}
+                    placeholder="Or type your question…"
+                    className="w-full rounded-full border border-cream-100 bg-cream-50 px-4 py-2 text-sm font-light text-ink placeholder:text-cream-150 focus:outline-none focus:border-ink/30 transition-colors"
+                    autoFocus
                   />
-                  <Button text="Ask a question" />
-                </div>
-              </motion.section>
+                  <div className="flex gap-3">
+                    <Button
+                      text="Ask"
+                      variant="primary"
+                      onClick={() => void submitQuestion(askQuestion)}
+                      disabled={!askQuestion.trim()}
+                    />
+                    <Button text="Cancel" onClick={() => setAskMode("bio")} />
+                  </div>
+                </motion.div>
+              ) : askMode === "thinking" ? (
+                <motion.div
+                  key="thinking"
+                  className="flex max-w-[360px] flex-col items-center gap-4"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ duration: 0.3, ease: "easeOut" }}
+                >
+                  <motion.div
+                    animate={{ scale: [1, 1.15, 1] }}
+                    transition={{ duration: 1.2, repeat: Infinity, ease: "easeInOut" }}
+                  >
+                    <Sparkle size={40} fill="currentColor" className="text-ink/70" />
+                  </motion.div>
+                  <p className="text-sm font-light text-muted">Thinking…</p>
+                </motion.div>
+              ) : (
+                <motion.div
+                  key={`answer-${askAnswer}`}
+                  className="flex max-w-[360px] flex-col items-start gap-6"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ duration: 0.7, ease: "easeOut" }}
+                >
+                  <TypewriterText speed={28} className="text-base font-light leading-relaxed text-ink">
+                    {askAnswer}
+                  </TypewriterText>
+                  <div className="flex flex-wrap gap-3">
+                    <Button text="Ask another" variant="primary" onClick={enterListening} />
+                    <Button text="Go back" onClick={() => setAskMode("bio")} />
+                  </div>
+                </motion.div>
+              )
             ) : null}
             <div className="pointer-events-none absolute inset-y-0 left-0 w-px bg-cream-150" />
           </div>
