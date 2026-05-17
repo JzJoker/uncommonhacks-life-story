@@ -19,7 +19,7 @@ type ButtonProps = {
   text?: string;
   variant?: ButtonVariant;
   href?: string;
-  onClick?: () => void;
+  onClick?: (event?: React.MouseEvent<HTMLButtonElement>) => void;
   disabled?: boolean;
 };
 

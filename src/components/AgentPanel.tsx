@@ -1,5 +1,5 @@
 import { Sparkle } from "lucide-react";
-import { BlurText } from "@/components/BlurText";
+import { TypewriterText } from "@/components/TypewriterText";
 
 type AgentPanelProps = {
   message: string;
@@ -19,12 +19,10 @@ export function AgentPanel({
     >
       <div className="flex items-center gap-1.5 text-xs uppercase tracking-[0.18em] text-ink">
         <Sparkle size={12} fill="currentColor" />
-        <span>Agent Logic</span>
+        <span>Book Keeper</span>
       </div>
       <p className="font-sans font-light text-ink leading-snug text-base sm:text-lg">
-        <BlurText hold={220} amount={5}>
-          {message}
-        </BlurText>
+        <TypewriterText>{message}</TypewriterText>
       </p>
       {actions && (
         <div className="flex flex-wrap gap-2 pt-1">{actions}</div>

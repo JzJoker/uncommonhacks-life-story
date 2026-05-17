@@ -12,7 +12,7 @@ import {
 import { createPortal } from "react-dom";
 import Button from "./Button";
 
-const PHOTO_ONE = "/dashboard/photo-1.png";
+const PLACEHOLDER = "/dashboard/photo-1.png";
 
 const FLY_DURATION_MS = 450;
 const FLY_EASING = "cubic-bezier(0.4, 0, 0.2, 1)";
@@ -34,7 +34,7 @@ export default function BookFrame({
   className = "",
   title = "Early Childhood",
   dateRange = "1999-2007",
-  coverImages = [PHOTO_ONE],
+  coverImages = [PLACEHOLDER],
 }: BookFrameProps) {
   const shellRef = useRef<HTMLDivElement>(null);
   const bookRef = useRef<HTMLDivElement>(null);
@@ -246,6 +246,7 @@ export default function BookFrame({
 
 const BookCover = forwardRef<HTMLDivElement, { coverImages: string[] }>(
   function BookCover({ coverImages }, ref) {
+    const img = (i: number) => coverImages[i] ?? coverImages[0] ?? PLACEHOLDER;
     return (
       <div
         ref={ref}
@@ -261,36 +262,18 @@ const BookCover = forwardRef<HTMLDivElement, { coverImages: string[] }>(
           </div>
           <div className="relative grid h-full w-full place-items-center p-12 group-hover:scale-95">
             <div className="absolute top-1/2 left-1/2 z-1 w-[70%] -translate-x-1/2 -translate-y-1/2 bg-white p-3 pb-12 shadow-sm transition-transform duration-300">
-              <div className="relative aspect-square w-full bg-green-500">
-                <Image
-                  src={coverImages[0]}
-                  alt=""
-                  fill
-                  className="object-cover"
-                  sizes="100%"
-                />
+              <div className="relative aspect-square w-full bg-gray-100">
+                <Image src={img(0)} alt="" fill className="object-cover" sizes="200px" unoptimized />
               </div>
             </div>
             <div className="absolute top-1/2 left-1/2 z-3 w-[70%] -translate-x-1/2 -translate-y-1/2 bg-white p-3 pb-12 shadow-sm transition-transform duration-300 group-hover:-translate-x-[calc(50%-24px)] group-hover:rotate-4">
-              <div className="relative aspect-square w-full bg-green-500">
-                <Image
-                  src={coverImages[0]}
-                  alt=""
-                  fill
-                  className="object-cover"
-                  sizes="100%"
-                />
+              <div className="relative aspect-square w-full bg-gray-100">
+                <Image src={img(1)} alt="" fill className="object-cover" sizes="200px" unoptimized />
               </div>
             </div>
             <div className="absolute top-1/2 left-1/2 w-[70%] -translate-x-1/2 -translate-y-1/2 bg-white p-3 pb-12 shadow-sm transition-transform duration-300 group-hover:-translate-x-[calc(50%+24px)] group-hover:-rotate-4">
-              <div className="relative aspect-square w-full bg-green-500">
-                <Image
-                  src={coverImages[0]}
-                  alt=""
-                  fill
-                  className="object-cover"
-                  sizes="100%"
-                />
+              <div className="relative aspect-square w-full bg-gray-100">
+                <Image src={img(2)} alt="" fill className="object-cover" sizes="200px" unoptimized />
               </div>
             </div>
           </div>
