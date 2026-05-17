@@ -7,6 +7,7 @@ import { BlurReveal } from "@/components/BlurReveal";
 import { Button } from "@/components/Button";
 import { Input } from "@/components/Input";
 import { supabase } from "@/lib/supabase";
+import Image from "next/image";
 
 export default function SignInPage() {
   const router = useRouter();
@@ -19,14 +20,56 @@ export default function SignInPage() {
     e.preventDefault();
     setError(null);
     setLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) { setError(error.message); setLoading(false); return; }
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+    if (error) {
+      setError(error.message);
+      setLoading(false);
+      return;
+    }
     router.replace("/");
   };
 
   return (
     <main className="flex-1 flex items-center justify-center bg-cream-50 px-16 py-16">
-      <div className="w-[420px] bg-paper border border-cream-50 rounded-[12px] p-6 flex flex-col items-center gap-5">
+      <div className="absolute inset-0 ">
+        <Image
+          src="/background/texturecoolness.jpg "
+          alt="Background Texture"
+          fill
+          className="object-cover opacity-30"
+        />
+        {/* 
+        <div className="flex gap-1  -bottom-20 -right-20  absolute  ">
+          <div className="w-[240px] h-[400px] relative z-50">
+            <Image
+              src="/background/trees/treeobj1.png"
+              alt="Background Texture"
+              fill
+              className="object-contain object-bottom"
+            />
+          </div>
+          <div className="w-[240px] h-[400px] relative z-50">
+            <Image
+              src="/background/trees/treeobj1.png"
+              alt="Background Texture"
+              fill
+              className="object-contain object-bottom"
+            />
+          </div>
+          <div className="w-[240px] h-[400px] relative z-50">
+            <Image
+              src="/background/trees/treeobj1.png"
+              alt="Background Texture"
+              fill
+              className="object-contain object-bottom"
+            />
+          </div>
+        </div> */}
+      </div>
+      <div className="w-[420px] z-30 bg-paper border border-cream-50 rounded-[12px] p-6 flex flex-col items-center gap-5">
         <div className="flex flex-col items-center gap-2 text-ink">
           <BlurReveal
             as="h1"
@@ -42,35 +85,72 @@ export default function SignInPage() {
 
         <form className="flex flex-col gap-4 w-full" onSubmit={handleSubmit}>
           <Field id="email" label="Email">
-            <Input id="email" type="email" autoComplete="email" placeholder="you@example.com"
-              value={email} onChange={(e) => setEmail(e.target.value)} required />
+            <Input
+              id="email"
+              type="email"
+              autoComplete="email"
+              placeholder="you@example.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+            />
           </Field>
 
           <Field id="password" label="Password">
-            <Input id="password" type="password" autoComplete="current-password" placeholder="••••••••"
-              value={password} onChange={(e) => setPassword(e.target.value)} required />
+            <Input
+              id="password"
+              type="password"
+              autoComplete="current-password"
+              placeholder="••••••••"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+            />
           </Field>
 
           {error && <p className="text-sm text-red-500 font-light">{error}</p>}
 
-          <Button variant="default" className="w-full" type="submit" disabled={loading}>
+          <Button
+            variant="default"
+            className="w-full cursor-pointer"
+            type="submit"
+            disabled={loading}
+          >
             {loading ? "Signing in…" : "Sign In"}
           </Button>
         </form>
 
         <p className="text-sm font-light text-muted">
           No account?{" "}
-          <Link href="/signup" className="text-ink underline underline-offset-2">Sign up</Link>
+          <Link
+            href="/signup"
+            className="text-ink underline underline-offset-2"
+          >
+            Sign up
+          </Link>
         </p>
       </div>
     </main>
   );
 }
 
-function Field({ id, label, children }: { id: string; label: string; children: React.ReactNode }) {
+function Field({
+  id,
+  label,
+  children,
+}: {
+  id: string;
+  label: string;
+  children: React.ReactNode;
+}) {
   return (
     <div className="flex flex-col gap-2 w-full">
-      <label htmlFor={id} className="text-base font-light text-muted leading-none">{label}</label>
+      <label
+        htmlFor={id}
+        className="text-base font-light text-muted leading-none"
+      >
+        {label}
+      </label>
       {children}
     </div>
   );

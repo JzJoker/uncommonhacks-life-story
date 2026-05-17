@@ -1,8 +1,14 @@
 "use client";
 
 import Image from "next/image";
-import { Images } from "lucide-react";
-import { useId, useRef, useState, type ChangeEvent, type ReactNode } from "react";
+import { Images, Upload } from "lucide-react";
+import {
+  useId,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type ReactNode,
+} from "react";
 
 type ImageUploadProps = {
   name?: string;
@@ -48,7 +54,7 @@ export function ImageUpload({
     <div
       className={[
         "bg-paper border border-cream-100 rounded-[4px]",
-        "w-full p-4 pb-8",
+        "w-full p-4 ",
         "shadow-[4px_4px_4px_0_rgba(0,0,0,0.04)]",
         className,
       ].join(" ")}
@@ -79,8 +85,8 @@ export function ImageUpload({
             />
           ) : (
             <div className="flex flex-col items-center gap-2.5 text-muted">
-              <Images size={48} strokeWidth={1.5} />
-              <span className="text-xs">{label}</span>
+              <Upload size={48} strokeWidth={1.5} />
+              <span className="">{label}</span>
             </div>
           )}
           <input

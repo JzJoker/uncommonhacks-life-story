@@ -7,6 +7,7 @@ import { SignOutButton } from "@/components/SignOutButton";
 import { supabase } from "@/lib/supabase";
 
 import type { CoverImage } from "@/components/dashboard/BookFrame";
+import Image from "next/image";
 
 type PersonBook = {
   id: string;
@@ -18,7 +19,8 @@ type PersonBook = {
 async function fetchBooks(patientId: string): Promise<PersonBook[]> {
   const { data, error } = await supabase
     .from("friends_family")
-    .select(`
+    .select(
+      `
       id,
       name,
       relation,
@@ -33,7 +35,8 @@ async function fetchBooks(patientId: string): Promise<PersonBook[]> {
           image_height
         )
       )
-    `)
+    `,
+    )
     .eq("patient_id", patientId)
     .order("name");
 
@@ -50,7 +53,12 @@ async function fetchBooks(patientId: string): Promise<PersonBook[]> {
         url: mp.memories.image_url as string,
         bbox:
           mp.bbox_x != null
-            ? ([mp.bbox_x, mp.bbox_y, mp.bbox_w, mp.bbox_h] as [number, number, number, number])
+            ? ([mp.bbox_x, mp.bbox_y, mp.bbox_w, mp.bbox_h] as [
+                number,
+                number,
+                number,
+                number,
+              ])
             : null,
         imageWidth: (mp.memories.image_width as number) ?? null,
         imageHeight: (mp.memories.image_height as number) ?? null,
@@ -72,10 +80,10 @@ export default async function DashboardView({
       className="fixed inset-0 flex flex-col justify-center gap-0 overflow-x-hidden bg-cream-50 py-16 text-ink"
       viewportClassName="min-h-0 flex h-full w-full flex-1 overflow-x-auto overscroll-x-contain scrollbar-hide"
       header={
-        <header className="flex w-full shrink-0 items-start justify-between px-32">
+        <header className="flex w-full shrink-0  z-30 items-start justify-between px-32">
           <div className="flex flex-col gap-3">
             <div className="flex flex-col gap-1">
-              <h1 className="font-hand text-[32px] leading-normal text-ink">
+              <h1 className="font-hand text-[36px] leading-normal text-ink">
                 {patientName}&apos;s Life
               </h1>
               <p className="text-2xl font-light leading-normal text-muted">
@@ -85,23 +93,120 @@ export default async function DashboardView({
           </div>
           <div className="flex items-center gap-4">
             <InviteContributorsButton patientId={patientId} />
-            <Button text="Add Memory" href={`/patient/${patientId}/new-memory`} />
-            <SignOutButton />
+            <Button
+              variant="primary"
+              text="Add Memory"
+              href={`/patient/${patientId}/new-memory`}
+            />
+            {/* <SignOutButton /> */}
           </div>
         </header>
       }
     >
-      <section className="flex w-max gap-12 px-32">
+      <div className="absolute inset-0 ">
+        <Image
+          src="/background/texturecoolness.jpg "
+          alt="Background Texture"
+          fill
+          className="object-cover opacity-20 pointer-events-none"
+        />
+      </div>
+      <section className="flex w-full  z-30 gap-12 px-32">
         {books.length === 0 ? (
-          <div className="self-center flex flex-col gap-4 items-start">
-            <p className="font-light text-muted">No memories yet.</p>
+          <div className="self-center w-full  h-full flex flex-col  mb-12 items-center justify-center">
+            <div className="relative flex-none -skew-x-1 w-[360px] scale-80 cursor-pointer transition-transform duration-300 ">
+              <div className="relative z-10 z-40 flex h-[507px] w-full items-start overflow-hidden rounded-r-3xl bg-gray-200">
+                <div className="relative z-30 h-full w-10 bg-black/10">
+                  <div className="pointer-events-none absolute inset-0 flex justify-between">
+                    {Array.from({ length: 12 }).map((_, i) => (
+                      <div key={i} className="h-full w-px bg-white/10" />
+                    ))}
+                  </div>
+                </div>
+                <div className="relative grid h-full w-full place-items-center p-12 group-hover:scale-95">
+                  <div className="absolute top-1/2 left-1/2 z-3 w-[70%] -translate-x-1/2 -translate-y-1/2 bg-white p-3 pb-12 shadow-sm transition-transform duration-300 group-hover:-translate-x-[calc(50%-24px)] group-hover:rotate-4">
+                    <div className="relative aspect-square w-full  grid place-items-center overflow-hidden bg-gray-100">
+                      <div className="w-[120px] aspect-square bg-white z-20  rounded-full relative" />
+                      <div className="w-[130px] aspect-square bg-white z-20 absolute bottom-0 left-1/2 -translate-x-1/2  translate-y-1/2 rounded-t-full " />
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div>
+                {Array.from({ length: 8 }, (_, i) => i + 1).map((d, i) => (
+                  <div
+                    key={d}
+                    className="absolute inset-0 rounded-r-3xl border border-l-0 border-black/20 bg-white"
+                    style={{
+                      transform: `translate(${i * 2}px, ${i * 2}px)`,
+                      zIndex: 24 - i,
+                    }}
+                  />
+                ))}
+              </div>
+            </div>
             <Link href={`/patient/${patientId}/new-memory`}>
-              <button className="text-sm font-light text-ink underline underline-offset-2">
-                Add the first memory →
-              </button>
+              <Button variant="primary" className="cursor-pointer flex gap-1">
+                <span>Add {patientName}&apos;s </span>
+                <span className="font-hand text-[24px] ">first memory</span>
+              </Button>
             </Link>
           </div>
         ) : (
+          //    <div className="flex flex-col items-center gap-0">
+          //   <h1 className="font-hand text-[32px]  text-ink">
+          //     Welcome to LifeStory.
+          //   </h1>
+          //   <div className="relative flex-none -skew-x-1 w-[360px] scale-80 cursor-pointer transition-transform duration-300 ">
+          //     <div className="relative z-10 z-40 flex h-[507px] w-full items-start overflow-hidden rounded-r-3xl bg-gray-200">
+          //       <div className="relative z-30 h-full w-10 bg-black/10">
+          //         <div className="pointer-events-none absolute inset-0 flex justify-between">
+          //           {Array.from({ length: 12 }).map((_, i) => (
+          //             <div key={i} className="h-full w-px bg-white/10" />
+          //           ))}
+          //         </div>
+          //       </div>
+          //       <div className="relative grid h-full w-full place-items-center p-12 group-hover:scale-95">
+          //         <div className="absolute top-1/2 left-1/2 z-3 w-[70%] -translate-x-1/2 -translate-y-1/2 bg-white p-3 pb-12 shadow-sm transition-transform duration-300 group-hover:-translate-x-[calc(50%-24px)] group-hover:rotate-4">
+          //           <div className="relative aspect-square w-full  grid place-items-center overflow-hidden bg-gray-100">
+          //             <div className="w-[120px] aspect-square bg-white z-20  rounded-full relative" />
+          //             <div className="w-[130px] aspect-square bg-white z-20 absolute bottom-0 left-1/2 -translate-x-1/2  translate-y-1/2 rounded-t-full " />
+          //           </div>
+          //         </div>
+          //       </div>
+          //     </div>
+          //     <div>
+          //       {Array.from({ length: 8 }, (_, i) => i + 1).map((d, i) => (
+          //         <div
+          //           key={d}
+          //           className="absolute inset-0 rounded-r-3xl border border-l-0 border-black/20 bg-white"
+          //           style={{
+          //             transform: `translate(${i * 2}px, ${i * 2}px)`,
+          //             zIndex: 24 - i,
+          //           }}
+          //         />
+          //       ))}
+          //     </div>
+          //   </div>
+          //   <div className="flex justify-center pt-6">
+          //     <Link href="/onboarding">
+          //       <Button variant="primary" className="cursor-pointer">
+          //         <span>Start your&nbsp;</span>
+          //         <span className="font-hand text-[22px] ">Life Story</span>
+          //       </Button>
+          //     </Link>
+          //   </div>
+          // </div
+          //   <div className="w-full h-full flex justify-center items-center bg-red-500">
+          //     <div className="self-center flex flex-col gap-4 items-start">
+          //       <p className="font-light text-muted">No memories yet.</p>
+          //       <Link href={`/patient/${patientId}/new-memory`}>
+          //         <button className="text-sm font-light text-ink underline underline-offset-2">
+          //           Add the first memory →
+          //         </button>
+          //       </Link>
+          //     </div>
+          //   </div>
           books.map((book) => (
             <BookFrame
               key={book.id}

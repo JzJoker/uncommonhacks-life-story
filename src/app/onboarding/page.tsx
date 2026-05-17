@@ -6,13 +6,17 @@ import { Button } from "@/components/Button";
 import { Input } from "@/components/Input";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/lib/supabase";
+import Image from "next/image";
 
 export default function OnboardingPage() {
   const router = useRouter();
   const { user, loading } = useAuth();
   const [name, setName] = useState("");
+  const [dateOfBirth, setDateOfBirth] = useState("");
   const [notes, setNotes] = useState("");
-  const [mode, setMode] = useState<"self_paced" | "caregiver_guided">("self_paced");
+  const [mode, setMode] = useState<"self_paced" | "caregiver_guided">(
+    "self_paced",
+  );
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -26,26 +30,62 @@ export default function OnboardingPage() {
 
     const { data, error } = await supabase
       .from("patients")
-      .insert({ caregiver_id: user.id, name, notes: notes || null, experience_mode: mode })
+      .insert({
+        caregiver_id: user.id,
+        name,
+        notes: notes || null,
+        experience_mode: mode,
+      })
       .select("id")
       .single();
 
-    if (error) { setError(error.message); setSaving(false); return; }
+    if (error) {
+      setError(error.message);
+      setSaving(false);
+      return;
+    }
     router.replace(`/patient/${data.id}`);
   };
 
   return (
     <main className="min-h-svh bg-cream-50 flex items-center justify-center px-6 py-16">
-      <div className="w-full max-w-[480px] bg-paper border border-cream-50 rounded-[12px] p-8 flex flex-col gap-6">
+      <div className="absolute inset-0 ">
+        <Image
+          src="/background/texturecoolness.jpg "
+          alt="Background Texture"
+          fill
+          className="object-cover opacity-30"
+        />
+      </div>
+      <div className="w-full max-w-[480px] z-50  bg-paper border border-cream-50 rounded-[12px] p-8 flex flex-col gap-6">
         <header className="flex flex-col gap-1">
-          <h1 className="font-hand text-[28px] text-ink">Create a Life Story</h1>
-          <p className="text-base font-light text-muted">Tell us about the person whose memories you&apos;re preserving.</p>
+          <h1 className="font-hand text-[28px] text-ink">
+            Create a Life Story
+          </h1>
+          <p className="text-base font-light text-muted">
+            Tell us about the person whose memories you&apos;re preserving.
+          </p>
         </header>
 
         <form className="flex flex-col gap-5" onSubmit={handleSubmit}>
           <Field label="Patient's name" htmlFor="name">
-            <Input id="name" placeholder="e.g. Andy Lin"
-              value={name} onChange={(e) => setName(e.target.value)} required />
+            <Input
+              id="name"
+              placeholder="e.g. Andy Lin"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              required
+            />
+          </Field>
+          <Field label="Date of birth" htmlFor="dateOfBirth">
+            <Input
+              id="dateOfBirth"
+              type="date"
+              placeholder="e.g. 1990-01-01"
+              value={dateOfBirth}
+              onChange={(e) => setDateOfBirth(e.target.value)}
+              required
+            />
           </Field>
 
           <Field label="Notes (optional)" htmlFor="notes">
@@ -59,23 +99,14 @@ export default function OnboardingPage() {
             />
           </Field>
 
-          <Field label="Experience mode" htmlFor="mode">
-            <div className="flex flex-col gap-2">
-              {(["self_paced", "caregiver_guided"] as const).map((m) => (
-                <label key={m} className="flex items-center gap-3 cursor-pointer">
-                  <input type="radio" name="mode" value={m} checked={mode === m}
-                    onChange={() => setMode(m)} className="accent-ink" />
-                  <span className="text-base font-light text-ink">
-                    {m === "self_paced" ? "Self-paced — patient explores independently" : "Caregiver-guided — caregiver navigates alongside"}
-                  </span>
-                </label>
-              ))}
-            </div>
-          </Field>
-
           {error && <p className="text-sm text-red-500 font-light">{error}</p>}
 
-          <Button variant="primary" type="submit" disabled={saving} className="w-full uppercase tracking-[0.18em]">
+          <Button
+            variant="primary"
+            type="submit"
+            disabled={saving}
+            className="w-full  cursor-pointer"
+          >
             {saving ? "Creating…" : "Create Life Story"}
           </Button>
         </form>
@@ -84,10 +115,23 @@ export default function OnboardingPage() {
   );
 }
 
-function Field({ label, htmlFor, children }: { label: string; htmlFor: string; children: React.ReactNode }) {
+function Field({
+  label,
+  htmlFor,
+  children,
+}: {
+  label: string;
+  htmlFor: string;
+  children: React.ReactNode;
+}) {
   return (
     <div className="flex flex-col gap-2">
-      <label htmlFor={htmlFor} className="text-base font-light text-muted leading-none">{label}</label>
+      <label
+        htmlFor={htmlFor}
+        className="text-base font-light text-muted leading-none"
+      >
+        {label}
+      </label>
       {children}
     </div>
   );

@@ -26,7 +26,11 @@ export default function SignUpPage() {
       password,
       options: { data: { first_name: firstName, last_name: lastName } },
     });
-    if (error) { setError(error.message); setLoading(false); return; }
+    if (error) {
+      setError(error.message);
+      setLoading(false);
+      return;
+    }
     router.replace("/onboarding");
   };
 
@@ -39,51 +43,104 @@ export default function SignUpPage() {
             text="Sign Up"
             className="font-hand text-[28px] leading-none"
           />
-          <BlurReveal text="Welcome to Lifestory" delay={80} className="text-base font-light" />
+          <BlurReveal
+            text="Welcome to Lifestory"
+            delay={80}
+            className="text-base font-light"
+          />
         </header>
 
         <form className="flex flex-col gap-5" onSubmit={handleSubmit}>
           <div className="flex gap-3">
             <Field label="First Name" htmlFor="firstName">
-              <Input id="firstName" autoComplete="given-name" placeholder="John"
-                value={firstName} onChange={(e) => setFirstName(e.target.value)} required />
+              <Input
+                id="firstName"
+                autoComplete="given-name"
+                placeholder="John"
+                value={firstName}
+                onChange={(e) => setFirstName(e.target.value)}
+                required
+              />
             </Field>
             <Field label="Last Name" htmlFor="lastName">
-              <Input id="lastName" autoComplete="family-name" placeholder="Doe"
-                value={lastName} onChange={(e) => setLastName(e.target.value)} required />
+              <Input
+                id="lastName"
+                autoComplete="family-name"
+                placeholder="Doe"
+                value={lastName}
+                onChange={(e) => setLastName(e.target.value)}
+                required
+              />
             </Field>
           </div>
 
           <Field label="Email" htmlFor="email">
-            <Input id="email" type="email" autoComplete="email" placeholder="you@example.com"
-              value={email} onChange={(e) => setEmail(e.target.value)} required />
+            <Input
+              id="email"
+              type="email"
+              autoComplete="email"
+              placeholder="you@example.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+            />
           </Field>
 
           <Field label="Password" htmlFor="password">
-            <Input id="password" type="password" autoComplete="new-password" placeholder="••••••••"
-              value={password} onChange={(e) => setPassword(e.target.value)} required />
+            <Input
+              id="password"
+              type="password"
+              autoComplete="new-password"
+              placeholder="••••••••"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+            />
           </Field>
 
           {error && <p className="text-sm text-red-500 font-light">{error}</p>}
 
-          <Button variant="default" type="submit" className="w-full" disabled={loading}>
+          <Button
+            variant="default"
+            type="submit"
+            className="w-full cursor-pointer"
+            disabled={loading}
+          >
             {loading ? "Creating account…" : "Create Account"}
           </Button>
         </form>
 
         <p className="text-sm font-light text-muted">
           Already have an account?{" "}
-          <Link href="/signin" className="text-ink underline underline-offset-2">Sign in</Link>
+          <Link
+            href="/signin"
+            className="text-ink underline underline-offset-2"
+          >
+            Sign in
+          </Link>
         </p>
       </div>
     </div>
   );
 }
 
-function Field({ label, htmlFor, children }: { label: string; htmlFor: string; children: React.ReactNode }) {
+function Field({
+  label,
+  htmlFor,
+  children,
+}: {
+  label: string;
+  htmlFor: string;
+  children: React.ReactNode;
+}) {
   return (
     <div className="flex flex-1 min-w-0 flex-col gap-2">
-      <label htmlFor={htmlFor} className="text-base font-light text-muted leading-none">{label}</label>
+      <label
+        htmlFor={htmlFor}
+        className="text-base font-light text-muted leading-none"
+      >
+        {label}
+      </label>
       {children}
     </div>
   );

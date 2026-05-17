@@ -10,6 +10,7 @@ import { Input } from "@/components/Input";
 import { usePersonDetection, type PersonBox } from "@/hooks/usePersonDetection";
 import { saveMemory } from "@/lib/saveMemory";
 import { supabase } from "@/lib/supabase";
+import Image from "next/image";
 
 type FlowState =
   | "empty"
@@ -30,10 +31,29 @@ const RELATION_OPTIONS: { group: string; options: string[] }[] = [
   { group: "Siblings", options: ["Brother", "Sister"] },
   { group: "Grandchildren", options: ["Grandson", "Granddaughter"] },
   { group: "Grandparents", options: ["Grandmother", "Grandfather"] },
-  { group: "In-laws", options: ["Son-in-law", "Daughter-in-law", "Mother-in-law", "Father-in-law", "Brother-in-law", "Sister-in-law"] },
-  { group: "Extended Family", options: ["Aunt", "Uncle", "Niece", "Nephew", "Cousin"] },
-  { group: "Friends", options: ["Close Friend", "Friend", "Childhood Friend", "Neighbor"] },
-  { group: "Professional", options: ["Coworker / Colleague", "Doctor / Caregiver", "Mentor"] },
+  {
+    group: "In-laws",
+    options: [
+      "Son-in-law",
+      "Daughter-in-law",
+      "Mother-in-law",
+      "Father-in-law",
+      "Brother-in-law",
+      "Sister-in-law",
+    ],
+  },
+  {
+    group: "Extended Family",
+    options: ["Aunt", "Uncle", "Niece", "Nephew", "Cousin"],
+  },
+  {
+    group: "Friends",
+    options: ["Close Friend", "Friend", "Childhood Friend", "Neighbor"],
+  },
+  {
+    group: "Professional",
+    options: ["Coworker / Colleague", "Doctor / Caregiver", "Mentor"],
+  },
   { group: "Other", options: ["Acquaintance", "Other"] },
 ];
 
@@ -48,36 +68,59 @@ function getQuestions(name: string) {
 
 function sortByX(boxes: PersonBox[]): PersonBox[] {
   return [...boxes].sort(
-    (a, b) => a.bbox[0] + a.bbox[2] / 2 - (b.bbox[0] + b.bbox[2] / 2)
+    (a, b) => a.bbox[0] + a.bbox[2] / 2 - (b.bbox[0] + b.bbox[2] / 2),
   );
 }
 
-function getMessage(state: FlowState, idx: number, total: number, patientName: string, currentPersonName?: string): string {
+function getMessage(
+  state: FlowState,
+  idx: number,
+  total: number,
+  patientName: string,
+  currentPersonName?: string,
+): string {
   const questions = getQuestions(patientName);
   switch (state) {
-    case "empty":         return "Ready for memory upload. Please upload an image for cataloging.";
-    case "analyzing":     return "Analyzing your image. Looking for familiar figures…";
+    case "empty":
+      return "Ready for memory upload. Please upload an image for cataloging.";
+    case "analyzing":
+      return "Analyzing your image. Looking for familiar figures…";
     case "identifying":
       if (total === 0) return "Who is this person?";
       if (total === 1) return "I found 1 person in this photo. Who is this?";
       return `Person ${idx + 1} of ${total} — who is this?`;
-    case "relation":      return `How is ${currentPersonName || "this person"} related to ${patientName}?`;
-    case "confirm":       return "Did I miss anyone?";
-    case "drawing":       return "Draw a box around the person I missed.";
-    case "questionnaire": return questions[idx];
+    case "relation":
+      return `How is ${currentPersonName || "this person"} related to ${patientName}?`;
+    case "confirm":
+      return "Did I miss anyone?";
+    case "drawing":
+      return "Draw a box around the person I missed.";
+    case "questionnaire":
+      return questions[idx];
     case "narrating":
       return `This is Justin, your grandson. In this photo you are standing next to him at the boardwalk. You used to take him to go rollerblading and he remembers laughing whenever he sped past you!`;
-    case "modifying":     return "Edit the story for this memory.";
-    case "done":          return "Saved. The narrator will tell this story whenever you open the memory.";
+    case "modifying":
+      return "Edit the story for this memory.";
+    case "done":
+      return "Saved. The narrator will tell this story whenever you open the memory.";
   }
 }
 
-export function NewMemoryForm({ patientId, patientName }: { patientId: string; patientName: string }) {
+export function NewMemoryForm({
+  patientId,
+  patientName,
+}: {
+  patientId: string;
+  patientName: string;
+}) {
   const router = useRouter();
   const [flowState, setFlowState] = useState<FlowState>("empty");
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
-  const [naturalSize, setNaturalSize] = useState<{ w: number; h: number } | null>(null);
+  const [naturalSize, setNaturalSize] = useState<{
+    w: number;
+    h: number;
+  } | null>(null);
   const [sortedBoxes, setSortedBoxes] = useState<PersonBox[]>([]);
   const [personIndex, setPersonIndex] = useState(0);
   const [personNames, setPersonNames] = useState<string[]>([]);
@@ -124,12 +167,20 @@ export function NewMemoryForm({ patientId, patientName }: { patientId: string; p
     if (trimmed && !existingPeople.includes(trimmed)) {
       setExistingPeople((prev) => [...prev, trimmed].sort());
     }
-    setPersonNames((prev) => { const next = [...prev]; next[personIndex] = name; return next; });
+    setPersonNames((prev) => {
+      const next = [...prev];
+      next[personIndex] = name;
+      return next;
+    });
     setFlowState("relation");
   };
 
   const advanceRelation = (relation: string) => {
-    setPersonRelations((prev) => { const next = [...prev]; next[personIndex] = relation; return next; });
+    setPersonRelations((prev) => {
+      const next = [...prev];
+      next[personIndex] = relation;
+      return next;
+    });
     if (personIndex < sortedBoxes.length - 1) {
       setPersonIndex((i) => i + 1);
       setFlowState("identifying");
@@ -138,14 +189,21 @@ export function NewMemoryForm({ patientId, patientName }: { patientId: string; p
     }
   };
 
-  const advanceQuestion = useCallback((answer: string) => {
-    setQuestionAnswers((prev) => { const next = [...prev]; next[questionIndex] = answer; return next; });
-    if (questionIndex < questions.length - 1) {
-      setQuestionIndex((i) => i + 1);
-    } else {
-      setFlowState("narrating");
-    }
-  }, [questionIndex, questions.length]);
+  const advanceQuestion = useCallback(
+    (answer: string) => {
+      setQuestionAnswers((prev) => {
+        const next = [...prev];
+        next[questionIndex] = answer;
+        return next;
+      });
+      if (questionIndex < questions.length - 1) {
+        setQuestionIndex((i) => i + 1);
+      } else {
+        setFlowState("narrating");
+      }
+    },
+    [questionIndex, questions.length],
+  );
 
   const handleReset = useCallback(() => {
     setFlowState("empty");
@@ -184,7 +242,15 @@ export function NewMemoryForm({ patientId, patientName }: { patientId: string; p
     } finally {
       setIsSaving(false);
     }
-  }, [patientId, imageFile, naturalSize, sortedBoxes, personNames, personRelations, questionAnswers]);
+  }, [
+    patientId,
+    imageFile,
+    naturalSize,
+    sortedBoxes,
+    personNames,
+    personRelations,
+    questionAnswers,
+  ]);
 
   const handleBoxDrawn = useCallback(
     (bbox: [number, number, number, number]) => {
@@ -193,16 +259,25 @@ export function NewMemoryForm({ patientId, patientName }: { patientId: string; p
       setPersonIndex(newIndex);
       setFlowState("identifying");
     },
-    [sortedBoxes.length]
+    [sortedBoxes.length],
   );
 
   const currentBox =
-    (flowState === "identifying" || flowState === "confirm") && sortedBoxes.length > 0
+    (flowState === "identifying" || flowState === "confirm") &&
+    sortedBoxes.length > 0
       ? sortedBoxes[personIndex]
       : null;
 
   return (
     <div className="min-h-svh bg-cream-50 flex flex-col items-center justify-center p-6 sm:p-10">
+      <div className="absolute inset-0 pointer-events-none ">
+        <Image
+          src="/background/texturecoolness.jpg "
+          alt="Background Texture"
+          fill
+          className="object-cover opacity-30"
+        />
+      </div>
       <div className="w-full max-w-[640px] flex flex-col gap-8 items-stretch">
         <ImageUpload
           name="photo"
@@ -259,7 +334,11 @@ export function NewMemoryForm({ patientId, patientName }: { patientId: string; p
 /* -------------------------------------------------------------------------- */
 
 function PhotoOverlay({
-  analyzing, box, naturalSize, drawing, onBoxDrawn,
+  analyzing,
+  box,
+  naturalSize,
+  drawing,
+  onBoxDrawn,
 }: {
   analyzing: boolean;
   box: PersonBox | null;
@@ -269,11 +348,21 @@ function PhotoOverlay({
 }) {
   return (
     <>
-      <Sparkle size={18} fill="currentColor"
-        className={["absolute bottom-3 right-3 text-ink/80 pointer-events-none z-10", analyzing ? "animate-pulse" : ""].join(" ")}
-        aria-hidden />
-      {!drawing && box && naturalSize && <PersonBoxOverlay bbox={box.bbox} naturalSize={naturalSize} />}
-      {drawing && naturalSize && <DrawingOverlay naturalSize={naturalSize} onBoxDrawn={onBoxDrawn} />}
+      <Sparkle
+        size={18}
+        fill="currentColor"
+        className={[
+          "absolute bottom-3 right-3 text-ink/80 pointer-events-none z-10",
+          analyzing ? "animate-pulse" : "",
+        ].join(" ")}
+        aria-hidden
+      />
+      {!drawing && box && naturalSize && (
+        <PersonBoxOverlay bbox={box.bbox} naturalSize={naturalSize} />
+      )}
+      {drawing && naturalSize && (
+        <DrawingOverlay naturalSize={naturalSize} onBoxDrawn={onBoxDrawn} />
+      )}
     </>
   );
 }
@@ -288,13 +377,19 @@ function perimeterPoint(t: number, r: Rect): [number, number] {
   const { x, y, w, h } = r;
   const p = 2 * (w + h);
   const d = (((t % 1) + 1) % 1) * p;
-  if (d < w)         return [x + d, y];
-  if (d < w + h)     return [x + w, y + (d - w)];
+  if (d < w) return [x + d, y];
+  if (d < w + h) return [x + w, y + (d - w)];
   if (d < 2 * w + h) return [x + w - (d - w - h), y + h];
   return [x, y + h - (d - 2 * w - h)];
 }
 
-function PersonBoxOverlay({ bbox, naturalSize }: { bbox: [number, number, number, number]; naturalSize: { w: number; h: number } }) {
+function PersonBoxOverlay({
+  bbox,
+  naturalSize,
+}: {
+  bbox: [number, number, number, number];
+  naturalSize: { w: number; h: number };
+}) {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const stateRef = useRef<{ rect: Rect; cW: number; cH: number } | null>(null);
@@ -313,8 +408,14 @@ function PersonBoxOverlay({ bbox, naturalSize }: { bbox: [number, number, number
       const oy = (cH - iH * scale) / 2;
       const [bx, by, bw, bh] = bbox;
       stateRef.current = {
-        rect: { x: bx * scale + ox, y: by * scale + oy, w: bw * scale, h: bh * scale },
-        cW, cH,
+        rect: {
+          x: bx * scale + ox,
+          y: by * scale + oy,
+          w: bw * scale,
+          h: bh * scale,
+        },
+        cW,
+        cH,
       };
     });
     ro.observe(el);
@@ -331,11 +432,17 @@ function PersonBoxOverlay({ bbox, naturalSize }: { bbox: [number, number, number
     const tick = (now: number) => {
       const s = stateRef.current;
       const canvas = canvasRef.current;
-      if (!s || !canvas) { raf = requestAnimationFrame(tick); return; }
+      if (!s || !canvas) {
+        raf = requestAnimationFrame(tick);
+        return;
+      }
 
       const { rect, cW, cH } = s;
       const { x, y, w, h } = rect;
-      if (off.width !== cW || off.height !== cH) { off.width = cW; off.height = cH; }
+      if (off.width !== cW || off.height !== cH) {
+        off.width = cW;
+        off.height = cH;
+      }
 
       const offCtx = off.getContext("2d")!;
       const ctx = canvas.getContext("2d")!;
@@ -353,7 +460,10 @@ function PersonBoxOverlay({ bbox, naturalSize }: { bbox: [number, number, number
         offCtx.globalAlpha = 0.12 + 0.88 * Math.pow(1 - dist * 2, 2);
         const [x1, y1] = perimeterPoint(t, rect);
         const [x2, y2] = perimeterPoint((i + 1) / N, rect);
-        offCtx.beginPath(); offCtx.moveTo(x1, y1); offCtx.lineTo(x2, y2); offCtx.stroke();
+        offCtx.beginPath();
+        offCtx.moveTo(x1, y1);
+        offCtx.lineTo(x2, y2);
+        offCtx.stroke();
       }
 
       const HOT = 0.08;
@@ -366,7 +476,10 @@ function PersonBoxOverlay({ bbox, naturalSize }: { bbox: [number, number, number
         offCtx.globalAlpha = Math.pow(1 - dist / HOT, 2);
         const [x1, y1] = perimeterPoint(t, rect);
         const [x2, y2] = perimeterPoint((i + 1) / N, rect);
-        offCtx.beginPath(); offCtx.moveTo(x1, y1); offCtx.lineTo(x2, y2); offCtx.stroke();
+        offCtx.beginPath();
+        offCtx.moveTo(x1, y1);
+        offCtx.lineTo(x2, y2);
+        offCtx.stroke();
       }
       offCtx.globalAlpha = 1;
       offCtx.lineWidth = 4;
@@ -376,12 +489,20 @@ function PersonBoxOverlay({ bbox, naturalSize }: { bbox: [number, number, number
       ctx.fillRect(0, 0, cW, cH);
       ctx.globalCompositeOperation = "destination-out";
       ctx.fillStyle = "black";
-      ctx.beginPath(); ctx.roundRect(x, y, w, h, 3); ctx.fill();
+      ctx.beginPath();
+      ctx.roundRect(x, y, w, h, 3);
+      ctx.fill();
       ctx.globalCompositeOperation = "source-over";
 
-      ctx.filter = "blur(32px)"; ctx.globalAlpha = 0.5; ctx.drawImage(off, 0, 0);
-      ctx.filter = "blur(12px)"; ctx.globalAlpha = 0.75; ctx.drawImage(off, 0, 0);
-      ctx.filter = "none"; ctx.globalAlpha = 1; ctx.drawImage(off, 0, 0);
+      ctx.filter = "blur(32px)";
+      ctx.globalAlpha = 0.5;
+      ctx.drawImage(off, 0, 0);
+      ctx.filter = "blur(12px)";
+      ctx.globalAlpha = 0.75;
+      ctx.drawImage(off, 0, 0);
+      ctx.filter = "none";
+      ctx.globalAlpha = 1;
+      ctx.drawImage(off, 0, 0);
 
       raf = requestAnimationFrame(tick);
     };
@@ -401,15 +522,32 @@ function PersonBoxOverlay({ bbox, naturalSize }: { bbox: [number, number, number
 /* Interactive drawing overlay                                                 */
 /* -------------------------------------------------------------------------- */
 
-function DrawingOverlay({ naturalSize, onBoxDrawn }: { naturalSize: { w: number; h: number }; onBoxDrawn: (bbox: [number, number, number, number]) => void }) {
+function DrawingOverlay({
+  naturalSize,
+  onBoxDrawn,
+}: {
+  naturalSize: { w: number; h: number };
+  onBoxDrawn: (bbox: [number, number, number, number]) => void;
+}) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const [containerSize, setContainerSize] = useState<{ w: number; h: number } | null>(null);
-  const [drag, setDrag] = useState<{ start: { x: number; y: number }; current: { x: number; y: number } } | null>(null);
+  const [containerSize, setContainerSize] = useState<{
+    w: number;
+    h: number;
+  } | null>(null);
+  const [drag, setDrag] = useState<{
+    start: { x: number; y: number };
+    current: { x: number; y: number };
+  } | null>(null);
 
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
-    const ro = new ResizeObserver(([entry]) => setContainerSize({ w: entry.contentRect.width, h: entry.contentRect.height }));
+    const ro = new ResizeObserver(([entry]) =>
+      setContainerSize({
+        w: entry.contentRect.width,
+        h: entry.contentRect.height,
+      }),
+    );
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
@@ -419,45 +557,72 @@ function DrawingOverlay({ naturalSize, onBoxDrawn }: { naturalSize: { w: number;
     return { x: e.clientX - rect.left, y: e.clientY - rect.top };
   };
 
-  const finalize = useCallback((end: { x: number; y: number }, start: { x: number; y: number }) => {
-    if (!containerSize) return;
-    const { w: cW, h: cH } = containerSize;
-    const { w: iW, h: iH } = naturalSize;
-    const scale = Math.min(cW / iW, cH / iH);
-    const ox = (cW - iW * scale) / 2;
-    const oy = (cH - iH * scale) / 2;
-    const dispX = Math.min(start.x, end.x);
-    const dispY = Math.min(start.y, end.y);
-    const dispW = Math.abs(end.x - start.x);
-    const dispH = Math.abs(end.y - start.y);
-    if (dispW < 10 || dispH < 10) return;
-    const imgX = Math.max(0, (dispX - ox) / scale);
-    const imgY = Math.max(0, (dispY - oy) / scale);
-    const imgW = Math.min(iW - imgX, dispW / scale);
-    const imgH = Math.min(iH - imgY, dispH / scale);
-    onBoxDrawn([imgX, imgY, imgW, imgH]);
-  }, [containerSize, naturalSize, onBoxDrawn]);
+  const finalize = useCallback(
+    (end: { x: number; y: number }, start: { x: number; y: number }) => {
+      if (!containerSize) return;
+      const { w: cW, h: cH } = containerSize;
+      const { w: iW, h: iH } = naturalSize;
+      const scale = Math.min(cW / iW, cH / iH);
+      const ox = (cW - iW * scale) / 2;
+      const oy = (cH - iH * scale) / 2;
+      const dispX = Math.min(start.x, end.x);
+      const dispY = Math.min(start.y, end.y);
+      const dispW = Math.abs(end.x - start.x);
+      const dispH = Math.abs(end.y - start.y);
+      if (dispW < 10 || dispH < 10) return;
+      const imgX = Math.max(0, (dispX - ox) / scale);
+      const imgY = Math.max(0, (dispY - oy) / scale);
+      const imgW = Math.min(iW - imgX, dispW / scale);
+      const imgH = Math.min(iH - imgY, dispH / scale);
+      onBoxDrawn([imgX, imgY, imgW, imgH]);
+    },
+    [containerSize, naturalSize, onBoxDrawn],
+  );
 
-  const previewStyle = drag ? {
-    left: Math.min(drag.start.x, drag.current.x),
-    top: Math.min(drag.start.y, drag.current.y),
-    width: Math.abs(drag.current.x - drag.start.x),
-    height: Math.abs(drag.current.y - drag.start.y),
-  } : null;
+  const previewStyle = drag
+    ? {
+        left: Math.min(drag.start.x, drag.current.x),
+        top: Math.min(drag.start.y, drag.current.y),
+        width: Math.abs(drag.current.x - drag.start.x),
+        height: Math.abs(drag.current.y - drag.start.y),
+      }
+    : null;
 
   return (
-    <div ref={containerRef}
+    <div
+      ref={containerRef}
       className="absolute inset-0 pointer-events-auto cursor-crosshair select-none"
       onMouseDown={(e) => setDrag({ start: getPos(e), current: getPos(e) })}
-      onMouseMove={(e) => drag && setDrag((d) => d && { ...d, current: getPos(e) })}
-      onMouseUp={(e) => { if (drag) { finalize(getPos(e), drag.start); setDrag(null); } }}
+      onMouseMove={(e) =>
+        drag && setDrag((d) => d && { ...d, current: getPos(e) })
+      }
+      onMouseUp={(e) => {
+        if (drag) {
+          finalize(getPos(e), drag.start);
+          setDrag(null);
+        }
+      }}
       onMouseLeave={() => setDrag(null)}
-      onTouchStart={(e) => setDrag({ start: getPos(e.touches[0]), current: getPos(e.touches[0]) })}
-      onTouchMove={(e) => drag && setDrag((d) => d && { ...d, current: getPos(e.touches[0]) })}
-      onTouchEnd={(e) => { if (drag) { finalize(getPos(e.changedTouches[0]), drag.start); setDrag(null); } }}
+      onTouchStart={(e) =>
+        setDrag({ start: getPos(e.touches[0]), current: getPos(e.touches[0]) })
+      }
+      onTouchMove={(e) =>
+        drag && setDrag((d) => d && { ...d, current: getPos(e.touches[0]) })
+      }
+      onTouchEnd={(e) => {
+        if (drag) {
+          finalize(getPos(e.changedTouches[0]), drag.start);
+          setDrag(null);
+        }
+      }}
     >
       <div className="absolute inset-0 bg-black/40" />
-      {previewStyle && <div style={previewStyle} className="absolute border-2 border-white bg-white/10" />}
+      {previewStyle && (
+        <div
+          style={previewStyle}
+          className="absolute border-2 border-white bg-white/10"
+        />
+      )}
     </div>
   );
 }
@@ -467,8 +632,20 @@ function DrawingOverlay({ naturalSize, onBoxDrawn }: { naturalSize: { w: number;
 /* -------------------------------------------------------------------------- */
 
 function Actions({
-  state, onNameSave, onSkip, onRelationSave, onRelationSkip, setFlowState, narratingMessage,
-  onAddMore, onViewLifeStory, onNextQuestion, isLastQuestion, onSave, isSaving, existingPeople,
+  state,
+  onNameSave,
+  onSkip,
+  onRelationSave,
+  onRelationSkip,
+  setFlowState,
+  narratingMessage,
+  onAddMore,
+  onViewLifeStory,
+  onNextQuestion,
+  isLastQuestion,
+  onSave,
+  isSaving,
+  existingPeople,
 }: {
   state: FlowState;
   onNameSave: (name: string) => void;
@@ -493,13 +670,23 @@ function Actions({
     case "done":
       return (
         <>
-          <Button variant="primary" size="sm" className="uppercase tracking-[0.18em]" onClick={onAddMore}>Add More</Button>
-          <Button variant="default" size="sm" className="uppercase tracking-[0.18em]" onClick={onViewLifeStory}>View Life Story</Button>
+          <Button variant="primary" className="" onClick={onAddMore}>
+            Add More
+          </Button>
+          <Button variant="default" className="" onClick={onViewLifeStory}>
+            View Life Story
+          </Button>
         </>
       );
 
     case "identifying":
-      return <NameForm onSave={onNameSave} onSkip={onSkip} suggestions={existingPeople} />;
+      return (
+        <NameForm
+          onSave={onNameSave}
+          onSkip={onSkip}
+          suggestions={existingPeople}
+        />
+      );
 
     case "relation":
       return <RelationForm onSave={onRelationSave} onSkip={onRelationSkip} />;
@@ -507,14 +694,32 @@ function Actions({
     case "confirm":
       return (
         <>
-          <Button variant="primary" size="sm" className="uppercase tracking-[0.18em]" onClick={() => setFlowState("drawing")}>Yes</Button>
-          <Button variant="default" size="sm" className="uppercase tracking-[0.18em]" onClick={() => setFlowState("questionnaire")}>No, we&apos;re good</Button>
+          <Button
+            variant="primary"
+            className=""
+            onClick={() => setFlowState("drawing")}
+          >
+            Yes
+          </Button>
+          <Button
+            variant="default"
+            className=""
+            onClick={() => setFlowState("questionnaire")}
+          >
+            No, we&apos;re good
+          </Button>
         </>
       );
 
     case "drawing":
       return (
-        <Button variant="default" size="sm" className="uppercase tracking-[0.18em]" onClick={() => setFlowState("confirm")}>Cancel</Button>
+        <Button
+          variant="default"
+          className=""
+          onClick={() => setFlowState("confirm")}
+        >
+          Cancel
+        </Button>
       );
 
     case "questionnaire":
@@ -523,19 +728,44 @@ function Actions({
     case "narrating":
       return (
         <>
-          <Button variant="primary" size="sm" className="uppercase tracking-[0.18em]" disabled={isSaving} onClick={onSave}>
+          <Button
+            variant="primary"
+            className=""
+            disabled={isSaving}
+            onClick={onSave}
+          >
             {isSaving ? "Saving…" : "Correct!"}
           </Button>
-          <Button variant="default" size="sm" className="uppercase tracking-[0.18em]" disabled={isSaving} onClick={() => setFlowState("modifying")}>Modify</Button>
+          <Button
+            variant="default"
+            className=""
+            disabled={isSaving}
+            onClick={() => setFlowState("modifying")}
+          >
+            Modify
+          </Button>
         </>
       );
 
     case "modifying":
-      return <ModifyForm initial={narratingMessage} onSave={() => setFlowState("done")} />;
+      return (
+        <ModifyForm
+          initial={narratingMessage}
+          onSave={() => setFlowState("done")}
+        />
+      );
   }
 }
 
-function NameForm({ onSave, onSkip, suggestions }: { onSave: (name: string) => void; onSkip: () => void; suggestions: string[] }) {
+function NameForm({
+  onSave,
+  onSkip,
+  suggestions,
+}: {
+  onSave: (name: string) => void;
+  onSkip: () => void;
+  suggestions: string[];
+}) {
   const [name, setName] = useState("");
   const [open, setOpen] = useState(false);
 
@@ -543,15 +773,28 @@ function NameForm({ onSave, onSkip, suggestions }: { onSave: (name: string) => v
     ? suggestions.filter((s) => s.toLowerCase().includes(name.toLowerCase()))
     : [];
 
-  const commit = (value: string) => { onSave(value); setName(""); setOpen(false); };
+  const commit = (value: string) => {
+    onSave(value);
+    setName("");
+    setOpen(false);
+  };
 
   return (
-    <form className="flex gap-2 w-full max-w-sm" onSubmit={(e) => { e.preventDefault(); commit(name); }}>
+    <form
+      className="flex gap-2 w-full max-w-sm"
+      onSubmit={(e) => {
+        e.preventDefault();
+        commit(name);
+      }}
+    >
       <div className="relative flex-1">
         <Input
           placeholder="Enter their name"
           value={name}
-          onChange={(e) => { setName(e.target.value); setOpen(true); }}
+          onChange={(e) => {
+            setName(e.target.value);
+            setOpen(true);
+          }}
           onFocus={() => setOpen(true)}
           onBlur={() => setOpen(false)}
           autoComplete="off"
@@ -562,7 +805,10 @@ function NameForm({ onSave, onSkip, suggestions }: { onSave: (name: string) => v
               <li
                 key={s}
                 className="px-4 py-2 text-sm font-light text-ink cursor-pointer hover:bg-cream-50"
-                onMouseDown={(e) => { e.preventDefault(); commit(s); }}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  commit(s);
+                }}
               >
                 {s}
               </li>
@@ -570,56 +816,130 @@ function NameForm({ onSave, onSkip, suggestions }: { onSave: (name: string) => v
           </ul>
         )}
       </div>
-      <Button variant="primary" size="sm" type="submit">Save</Button>
-      <Button variant="default" size="sm" type="button" onClick={onSkip}>Skip</Button>
+      <Button variant="primary" type="submit">
+        Save
+      </Button>
+      <Button variant="default" type="button" onClick={onSkip}>
+        Skip
+      </Button>
     </form>
   );
 }
 
-function RelationForm({ onSave, onSkip }: { onSave: (relation: string) => void; onSkip: () => void }) {
+function RelationForm({
+  onSave,
+  onSkip,
+}: {
+  onSave: (relation: string) => void;
+  onSkip: () => void;
+}) {
   const [relation, setRelation] = useState("");
   return (
-    <form className="flex gap-2 w-full max-w-sm" onSubmit={(e) => { e.preventDefault(); onSave(relation); setRelation(""); }}>
+    <form
+      className="flex gap-2 w-full max-w-sm"
+      onSubmit={(e) => {
+        e.preventDefault();
+        onSave(relation);
+        setRelation("");
+      }}
+    >
       <select
         value={relation}
         onChange={(e) => setRelation(e.target.value)}
         className="flex-1 rounded-[4px] border border-cream-50 bg-paper px-4 py-3 text-base font-light text-ink focus:outline-none focus:border-ink/40 transition-colors appearance-none"
       >
-        <option value="" disabled>Select relation…</option>
+        <option value="" disabled>
+          Select relation…
+        </option>
         {RELATION_OPTIONS.map(({ group, options }) => (
           <optgroup key={group} label={group}>
             {options.map((opt) => (
-              <option key={opt} value={opt}>{opt}</option>
+              <option key={opt} value={opt}>
+                {opt}
+              </option>
             ))}
           </optgroup>
         ))}
       </select>
-      <Button variant="primary" size="sm" type="submit" disabled={!relation}>Save</Button>
-      <Button variant="default" size="sm" type="button" onClick={onSkip}>Skip</Button>
+      <Button variant="primary" type="submit" disabled={!relation}>
+        Save
+      </Button>
+      <Button variant="default" type="button" onClick={onSkip}>
+        Skip
+      </Button>
     </form>
   );
 }
 
-function QuestionForm({ onNext, isLast }: { onNext: (answer: string) => void; isLast: boolean }) {
+function QuestionForm({
+  onNext,
+  isLast,
+}: {
+  onNext: (answer: string) => void;
+  isLast: boolean;
+}) {
   const [answer, setAnswer] = useState("");
   return (
-    <form className="flex flex-col gap-2 w-full" onSubmit={(e) => { e.preventDefault(); onNext(answer); setAnswer(""); }}>
-      <textarea rows={3} placeholder="Your answer…" value={answer} onChange={(e) => setAnswer(e.target.value)}
-        className="w-full rounded-[4px] border border-cream-50 bg-paper px-4 py-3 text-base font-light text-ink placeholder:text-cream-150 focus:outline-none focus:border-ink/40 transition-colors resize-none" />
+    <form
+      className="flex flex-col gap-2 w-full"
+      onSubmit={(e) => {
+        e.preventDefault();
+        onNext(answer);
+        setAnswer("");
+      }}
+    >
+      <textarea
+        rows={3}
+        placeholder="Your answer…"
+        value={answer}
+        onChange={(e) => setAnswer(e.target.value)}
+        className="w-full rounded-[4px] border border-cream-50 bg-paper px-4 py-3 text-base font-light text-ink placeholder:text-cream-150 focus:outline-none focus:border-ink/40 transition-colors resize-none"
+      />
       <div className="flex gap-2">
-        <Button variant="primary" size="sm" type="submit" className="uppercase tracking-[0.18em]">{isLast ? "Done" : "Next"}</Button>
-        <Button variant="default" size="sm" type="button" className="uppercase tracking-[0.18em]" onClick={() => { onNext(""); setAnswer(""); }}>Skip</Button>
+        <Button variant="primary" type="submit" className="">
+          {isLast ? "Done" : "Next"}
+        </Button>
+        <Button
+          variant="default"
+          type="button"
+          className=""
+          onClick={() => {
+            onNext("");
+            setAnswer("");
+          }}
+        >
+          Skip
+        </Button>
       </div>
     </form>
   );
 }
 
-function ModifyForm({ initial, onSave }: { initial: string; onSave: () => void }) {
+function ModifyForm({
+  initial,
+  onSave,
+}: {
+  initial: string;
+  onSave: () => void;
+}) {
   return (
-    <form className="flex flex-col gap-2 w-full" onSubmit={(e) => { e.preventDefault(); onSave(); }}>
-      <textarea defaultValue={initial} rows={4}
-        className="w-full rounded-[4px] border border-cream-50 bg-paper px-4 py-3 text-base font-light text-ink placeholder:text-cream-150 focus:outline-none focus:border-ink/40 transition-colors resize-none" />
-      <div className="flex gap-2"><Button variant="primary" type="submit">Save</Button></div>
+    <form
+      className="flex flex-col gap-2 w-full"
+      onSubmit={(e) => {
+        e.preventDefault();
+        onSave();
+      }}
+    >
+      <textarea
+        defaultValue={initial}
+        rows={4}
+        className="w-full rounded-[4px] border border-cream-50 bg-paper px-4 py-3 text-base font-light text-ink placeholder:text-cream-150 focus:outline-none focus:border-ink/40 transition-colors resize-none"
+      />
+      <div className="flex gap-2">
+        <Button variant="primary" type="submit">
+          Save
+        </Button>
+      </div>
     </form>
   );
 }
