@@ -29,6 +29,18 @@ Competition tracks: Social Impact, Best Use of ElevenLabs
 
 ---
 
+## Sign-Up & Onboarding Flow
+
+- The `/signup` screen is **caregiver-only**. Contributors never reach it — they join via invite link and authenticate separately.
+- After a caregiver creates an account, they are routed to `/onboarding` to set up their first patient (Life Story).
+- Returning sign-in lands on `/`, which branches by patient count:
+  - **0 patients** → empty state showing only a "Start your Life Story" CTA into `/onboarding` (no header, no sign-out button — a fresh caregiver hasn't built anything yet).
+  - **1 patient** → auto-redirects to `/patient/{id}`.
+  - **2+ patients** → Life Stories chooser grid with header and sign-out.
+- Treat the empty home state as a first-run experience for a caregiver who just signed up — keep copy oriented to "starting" a Life Story, not "choosing" one.
+
+---
+
 ## Core Features
 
 ### Photo + Narration Journal
