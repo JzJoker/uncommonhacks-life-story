@@ -83,6 +83,13 @@ export async function speak(text: string, opts: SpeakOptions = {}): Promise<void
   if (!res.ok) {
     const detail = await res.text().catch(() => "");
     if (current === session) current = null;
+    if (
+      res.status === 502 &&
+      (detail.includes("ELEVENLABS_API_KEY") || detail.includes("not set"))
+    ) {
+      console.warn("[speak] TTS unavailable — add ELEVENLABS_API_KEY to .env.local");
+      return;
+    }
     throw new Error(`TTS request failed (${res.status}): ${detail}`);
   }
 
