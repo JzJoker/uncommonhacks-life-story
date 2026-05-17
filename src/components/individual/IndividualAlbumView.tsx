@@ -6,6 +6,7 @@ import { Sparkle } from "lucide-react";
 import Button from "@/components/dashboard/Button";
 import PhotoCard from "@/components/individual/PhotoCard";
 import TypewriterText from "@/components/TypewriterText";
+import { answerInvitesResponse } from "@/lib/answerInvitesResponse";
 import { speak, stopSpeaking } from "@/lib/speak";
 import type { Highlight } from "@/app/api/ask/route";
 
@@ -83,16 +84,18 @@ export default function IndividualAlbumView({
   const [flipTarget, setFlipTarget] = useState<FlipTarget>("single");
   const flipTargetRef = useRef<FlipTarget>("single");
   const [narration, setNarration] = useState<string | null>(personNarration);
-  const [highlight, setHighlight] = useState<Highlight | null>(null);
+  const [highlights, setHighlights] = useState<Highlight[]>([]);
 
   // Ask Q&A state
   const [askMode, setAskMode] = useState<AskMode>("bio");
   const [askAnswer, setAskAnswer] = useState("");
+  const [promptWhileListening, setPromptWhileListening] = useState("");
   const [askQuestion, setAskQuestion] = useState("");
   const askHistoryRef = useRef<{ role: string; content: string }[]>([]);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const recognitionRef = useRef<any>(null);
   const transcriptRef = useRef("");
+  const agentMessageAudioRef = useRef<HTMLAudioElement | null>(null);
 
   const featured = photoCards[currentIndex];
   const currentMemoryId = featured?.memoryId ?? null;
@@ -107,8 +110,10 @@ export default function IndividualAlbumView({
 
   // Reset Q&A and highlight when photo changes
   useEffect(() => {
-    setHighlight(null);
+    setHighlights([]);
     setAskMode("bio");
+    setAskAnswer("");
+    setPromptWhileListening("");
     setAskQuestion("");
     askHistoryRef.current = [];
     transcriptRef.current = "";
@@ -184,10 +189,22 @@ export default function IndividualAlbumView({
     return () => clearTimeout(timer);
   }, [isAnimating, completeFlip]);
 
-  function enterListening() {
-    setAskMode("listening");
-    setAskQuestion("");
+  const playMessageAudio = useCallback((url: string) => {
+    if (!url) return;
+    let audio = agentMessageAudioRef.current;
+    if (!audio) {
+      audio = new Audio();
+      agentMessageAudioRef.current = audio;
+    }
+    audio.pause();
+    audio.src = url;
+    void audio.play().catch((err) => console.error("[Album] message audio failed", err));
+  }, []);
+
+  function startSpeechRecognition() {
+    recognitionRef.current?.abort?.();
     transcriptRef.current = "";
+    setAskQuestion("");
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
@@ -212,19 +229,42 @@ export default function IndividualAlbumView({
     try { recognition.start(); } catch { /* mic permission denied or already running */ }
   }
 
+  function enterListening(options?: { preservePrompt?: boolean }) {
+    setAskMode("listening");
+    if (!options?.preservePrompt) {
+      setPromptWhileListening("");
+    }
+    startSpeechRecognition();
+  }
+
   async function submitQuestion(question: string) {
     if (!question.trim()) return;
     recognitionRef.current?.stop?.();
     recognitionRef.current = null;
+    setPromptWhileListening("");
     setAskMode("thinking");
     const history = askHistoryRef.current;
     try {
       const res = await fetch("/api/ask", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question, personId, patientId, currentMemoryId, history }),
+        body: JSON.stringify({
+          question,
+          personId,
+          patientId,
+          currentMemoryId,
+          hasAudioMessage: !!featured.messageAudioUrl,
+          attribution: featured.attribution,
+          history,
+        }),
       });
-      const data: { answer: string; highlight: Highlight | null } = await res.json();
+      const data: {
+        answer: string;
+        highlights?: Highlight[];
+        highlight?: Highlight | null;
+        audioUrl: string | null;
+        shouldListen: boolean;
+      } = await res.json();
       const answer = data.answer || "Sorry, I couldn't find that.";
       askHistoryRef.current = [
         ...history,
@@ -232,8 +272,30 @@ export default function IndividualAlbumView({
         { role: "assistant", content: answer },
       ];
       setAskAnswer(answer);
-      setHighlight(data.highlight ?? null);
-      setAskMode("answer");
+      setHighlights(
+        data.highlights?.length
+          ? data.highlights
+          : data.highlight
+            ? [data.highlight]
+            : [],
+      );
+
+      if (data.audioUrl) {
+        playMessageAudio(data.audioUrl);
+      }
+
+      const shouldListen =
+        !data.audioUrl &&
+        (data.shouldListen || answerInvitesResponse(answer));
+      if (shouldListen) {
+        setPromptWhileListening(answer);
+        setAskMode("listening");
+        // wait for typewriter on the prompt, then start mic
+        setTimeout(startSpeechRecognition, answer.length * 28 + 1000);
+      } else {
+        setPromptWhileListening("");
+        setAskMode("answer");
+      }
     } catch {
       setAskAnswer("Something went wrong. Please try again.");
       setAskMode("answer");
@@ -270,14 +332,19 @@ export default function IndividualAlbumView({
                   quote={featured.quote}
                   attribution={featured.attribution}
                   messageAudioUrl={featured.messageAudioUrl}
-                  highlight={
-                    highlight && featured.imageWidth && featured.imageHeight
-                      ? {
-                          bbox: [highlight.bbox_x, highlight.bbox_y, highlight.bbox_w, highlight.bbox_h],
-                          imageWidth: highlight.imageWidth,
-                          imageHeight: highlight.imageHeight,
-                        }
-                      : null
+                  highlights={
+                    featured.imageWidth && featured.imageHeight
+                      ? highlights.map((h) => ({
+                          bbox: [h.bbox_x, h.bbox_y, h.bbox_w, h.bbox_h] as [
+                            number,
+                            number,
+                            number,
+                            number,
+                          ],
+                          imageWidth: h.imageWidth,
+                          imageHeight: h.imageHeight,
+                        }))
+                      : []
                   }
                 />
               </div>
@@ -389,19 +456,28 @@ export default function IndividualAlbumView({
                 </motion.section>
               ) : askMode === "listening" ? (
                 <motion.div
-                  key="listening"
-                  className="flex max-w-[360px] flex-col items-center gap-6 w-full"
+                  key={promptWhileListening ? `listening-prompt-${promptWhileListening}` : "listening"}
+                  className={`flex max-w-[360px] w-full flex-col gap-6 ${promptWhileListening ? "items-start" : "items-center"}`}
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   transition={{ duration: 0.3, ease: "easeOut" }}
                 >
+                  {promptWhileListening ? (
+                    <TypewriterText speed={28} className="text-base font-light leading-relaxed text-ink">
+                      {promptWhileListening}
+                    </TypewriterText>
+                  ) : null}
                   <motion.div
-                    animate={{ scale: [1, 1.3, 1] }}
-                    transition={{ duration: 1.8, repeat: Infinity, ease: "easeInOut" }}
+                    className={`flex flex-col items-center gap-3 w-full ${promptWhileListening ? "pt-2 border-t border-cream-100" : ""}`}
                   >
-                    <Sparkle size={40} fill="currentColor" className="text-ink/70" />
+                    <motion.div
+                      animate={{ scale: [1, 1.3, 1] }}
+                      transition={{ duration: 1.8, repeat: Infinity, ease: "easeInOut" }}
+                    >
+                      <Sparkle size={40} fill="currentColor" className="text-ink/70" />
+                    </motion.div>
+                    <p className="text-base font-light text-muted">Listening…</p>
                   </motion.div>
-                  <p className="text-base font-light text-muted">Listening…</p>
                   <input
                     type="text"
                     value={askQuestion}
@@ -412,18 +488,31 @@ export default function IndividualAlbumView({
                         void submitQuestion(askQuestion);
                       }
                     }}
-                    placeholder="Or type your question…"
+                    placeholder={promptWhileListening ? "Or type your answer…" : "Or type your question…"}
                     className="w-full rounded-full border border-cream-100 bg-cream-50 px-4 py-2 text-sm font-light text-ink placeholder:text-cream-150 focus:outline-none focus:border-ink/30 transition-colors"
                     autoFocus
                   />
                   <div className="flex gap-3">
                     <Button
-                      text="Ask"
+                      text={promptWhileListening ? "Submit" : "Ask"}
                       variant="primary"
                       onClick={() => void submitQuestion(askQuestion)}
                       disabled={!askQuestion.trim()}
                     />
-                    <Button text="Cancel" onClick={() => setAskMode("bio")} />
+                    <Button
+                      text="Cancel"
+                      onClick={() => {
+                        recognitionRef.current?.abort?.();
+                        recognitionRef.current = null;
+                        if (promptWhileListening) {
+                          setAskAnswer(promptWhileListening);
+                          setPromptWhileListening("");
+                          setAskMode("answer");
+                        } else {
+                          setAskMode("bio");
+                        }
+                      }}
+                    />
                   </div>
                 </motion.div>
               ) : askMode === "thinking" ? (
@@ -453,10 +542,13 @@ export default function IndividualAlbumView({
                   <TypewriterText speed={28} className="text-base font-light leading-relaxed text-ink">
                     {askAnswer}
                   </TypewriterText>
-                  <div className="flex flex-wrap gap-3">
-                    <Button text="Ask another" variant="primary" onClick={enterListening} />
-                    <Button text="Go back" onClick={() => setAskMode("bio")} />
-                  </div>
+                  <Button
+                    text="Go back"
+                    onClick={() => {
+                      setHighlights([]);
+                      setAskMode("bio");
+                    }}
+                  />
                 </motion.div>
               )
             ) : null}

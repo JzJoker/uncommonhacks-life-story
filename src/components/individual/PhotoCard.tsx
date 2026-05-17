@@ -21,18 +21,55 @@ function perimeterPoint(t: number, r: Rect): [number, number] {
   return [x, y + h - (d - 2 * w - h)];
 }
 
-function PersonBoxHighlight({
-  bbox,
+function drawGlowBorder(offCtx: CanvasRenderingContext2D, rect: Rect, headT: number, N: number) {
+  offCtx.strokeStyle = "white";
+  offCtx.lineWidth = 3;
+  offCtx.lineCap = "butt";
+
+  for (let i = 0; i < N; i++) {
+    const t = i / N;
+    let dist = Math.abs(t - headT);
+    if (dist > 0.5) dist = 1 - dist;
+    offCtx.globalAlpha = 0.12 + 0.88 * Math.pow(1 - dist * 2, 2);
+    const [x1, y1] = perimeterPoint(t, rect);
+    const [x2, y2] = perimeterPoint((i + 1) / N, rect);
+    offCtx.beginPath();
+    offCtx.moveTo(x1, y1);
+    offCtx.lineTo(x2, y2);
+    offCtx.stroke();
+  }
+
+  const HOT = 0.08;
+  offCtx.lineWidth = 5;
+  for (let i = 0; i < N; i++) {
+    const t = i / N;
+    let dist = Math.abs(t - headT);
+    if (dist > 0.5) dist = 1 - dist;
+    if (dist > HOT) continue;
+    offCtx.globalAlpha = Math.pow(1 - dist / HOT, 2);
+    const [x1, y1] = perimeterPoint(t, rect);
+    const [x2, y2] = perimeterPoint((i + 1) / N, rect);
+    offCtx.beginPath();
+    offCtx.moveTo(x1, y1);
+    offCtx.lineTo(x2, y2);
+    offCtx.stroke();
+  }
+  offCtx.globalAlpha = 1;
+  offCtx.lineWidth = 4;
+}
+
+function PeopleBoxHighlight({
+  boxes,
   imageWidth,
   imageHeight,
 }: {
-  bbox: [number, number, number, number];
+  boxes: [number, number, number, number][];
   imageWidth: number;
   imageHeight: number;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const stateRef = useRef<{ rect: Rect; cW: number; cH: number } | null>(null);
+  const stateRef = useRef<{ rects: Rect[]; cW: number; cH: number } | null>(null);
 
   useEffect(() => {
     const el = containerRef.current;
@@ -42,20 +79,20 @@ function PersonBoxHighlight({
       const { width: cW, height: cH } = entry.contentRect;
       canvas.width = cW;
       canvas.height = cH;
-      // object-cover → Math.max so the image fills the container
       const scale = Math.max(cW / imageWidth, cH / imageHeight);
       const ox = (cW - imageWidth * scale) / 2;
       const oy = (cH - imageHeight * scale) / 2;
-      const [bx, by, bw, bh] = bbox;
-      stateRef.current = {
-        rect: { x: bx * scale + ox, y: by * scale + oy, w: bw * scale, h: bh * scale },
-        cW,
-        cH,
-      };
+      const rects = boxes.map(([bx, by, bw, bh]) => ({
+        x: bx * scale + ox,
+        y: by * scale + oy,
+        w: bw * scale,
+        h: bh * scale,
+      }));
+      stateRef.current = { rects, cW, cH };
     });
     ro.observe(el);
     return () => ro.disconnect();
-  }, [bbox, imageWidth, imageHeight]);
+  }, [boxes, imageWidth, imageHeight]);
 
   useEffect(() => {
     const off = document.createElement("canvas");
@@ -67,52 +104,36 @@ function PersonBoxHighlight({
     const tick = (now: number) => {
       const s = stateRef.current;
       const canvas = canvasRef.current;
-      if (!s || !canvas) { raf = requestAnimationFrame(tick); return; }
+      if (!s || !canvas || s.rects.length === 0) {
+        raf = requestAnimationFrame(tick);
+        return;
+      }
 
-      const { rect, cW, cH } = s;
-      const { x, y, w, h } = rect;
-      if (off.width !== cW || off.height !== cH) { off.width = cW; off.height = cH; }
+      const { rects, cW, cH } = s;
+      if (off.width !== cW || off.height !== cH) {
+        off.width = cW;
+        off.height = cH;
+      }
 
       const offCtx = off.getContext("2d")!;
       const ctx = canvas.getContext("2d")!;
       const headT = ((now - origin) % DURATION) / DURATION;
 
       offCtx.clearRect(0, 0, cW, cH);
-      offCtx.strokeStyle = "white";
-      offCtx.lineWidth = 3;
-      offCtx.lineCap = "butt";
-
-      for (let i = 0; i < N; i++) {
-        const t = i / N;
-        let dist = Math.abs(t - headT);
-        if (dist > 0.5) dist = 1 - dist;
-        offCtx.globalAlpha = 0.12 + 0.88 * Math.pow(1 - dist * 2, 2);
-        const [x1, y1] = perimeterPoint(t, rect);
-        const [x2, y2] = perimeterPoint((i + 1) / N, rect);
-        offCtx.beginPath(); offCtx.moveTo(x1, y1); offCtx.lineTo(x2, y2); offCtx.stroke();
+      for (const rect of rects) {
+        drawGlowBorder(offCtx, rect, headT, N);
       }
-
-      const HOT = 0.08;
-      offCtx.lineWidth = 5;
-      for (let i = 0; i < N; i++) {
-        const t = i / N;
-        let dist = Math.abs(t - headT);
-        if (dist > 0.5) dist = 1 - dist;
-        if (dist > HOT) continue;
-        offCtx.globalAlpha = Math.pow(1 - dist / HOT, 2);
-        const [x1, y1] = perimeterPoint(t, rect);
-        const [x2, y2] = perimeterPoint((i + 1) / N, rect);
-        offCtx.beginPath(); offCtx.moveTo(x1, y1); offCtx.lineTo(x2, y2); offCtx.stroke();
-      }
-      offCtx.globalAlpha = 1;
-      offCtx.lineWidth = 4;
 
       ctx.clearRect(0, 0, cW, cH);
       ctx.fillStyle = "rgba(0,0,0,0.55)";
       ctx.fillRect(0, 0, cW, cH);
       ctx.globalCompositeOperation = "destination-out";
       ctx.fillStyle = "black";
-      ctx.beginPath(); ctx.roundRect(x, y, w, h, 3); ctx.fill();
+      for (const { x, y, w, h } of rects) {
+        ctx.beginPath();
+        ctx.roundRect(x, y, w, h, 3);
+        ctx.fill();
+      }
       ctx.globalCompositeOperation = "source-over";
 
       ctx.filter = "blur(32px)"; ctx.globalAlpha = 0.5; ctx.drawImage(off, 0, 0);
@@ -144,11 +165,11 @@ type PhotoCardProps = {
   className?: string;
   compact?: boolean;
   messageAudioUrl?: string | null;
-  highlight?: {
+  highlights?: {
     bbox: [number, number, number, number];
     imageWidth: number;
     imageHeight: number;
-  } | null;
+  }[];
 };
 
 export default function PhotoCard({
@@ -157,7 +178,7 @@ export default function PhotoCard({
   attribution = "",
   className = "",
   messageAudioUrl,
-  highlight,
+  highlights = [],
 }: PhotoCardProps) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [playing, setPlaying] = useState(false);
@@ -180,11 +201,11 @@ export default function PhotoCard({
       <div className="relative h-[252px] w-full overflow-hidden rounded">
         <Image src={src} alt="" fill className="object-cover" sizes="360px" unoptimized />
 
-        {highlight && (
-          <PersonBoxHighlight
-            bbox={highlight.bbox}
-            imageWidth={highlight.imageWidth}
-            imageHeight={highlight.imageHeight}
+        {highlights.length > 0 && (
+          <PeopleBoxHighlight
+            boxes={highlights.map((h) => h.bbox)}
+            imageWidth={highlights[0].imageWidth}
+            imageHeight={highlights[0].imageHeight}
           />
         )}
 
