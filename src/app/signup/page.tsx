@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { BlurReveal } from "@/components/BlurReveal";
 import { Button } from "@/components/Button";
 import { Input } from "@/components/Input";
 import { supabase } from "@/lib/supabase";
@@ -33,8 +34,12 @@ export default function SignUpPage() {
     <div className="min-h-svh flex-1 bg-cream-50 px-16 py-16 flex items-center justify-center">
       <div className="w-[420px] max-w-full bg-paper border border-cream-50 rounded-[12px] p-6 flex flex-col gap-5">
         <header className="flex flex-col gap-2 text-ink">
-          <h1 className="font-hand text-[28px] leading-none">Sign Up</h1>
-          <p className="text-base font-light">Welcome to Lifestory</p>
+          <BlurReveal
+            as="h1"
+            text="Sign Up"
+            className="font-hand text-[28px] leading-none"
+          />
+          <BlurReveal text="Welcome to Lifestory" delay={80} className="text-base font-light" />
         </header>
 
         <form className="flex flex-col gap-5" onSubmit={handleSubmit}>
