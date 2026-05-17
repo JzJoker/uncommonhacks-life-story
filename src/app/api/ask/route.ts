@@ -507,7 +507,9 @@ export async function POST(req: NextRequest) {
         "Never say 'There you go', 'I have highlighted', 'on the left/right side of the photo', or similar. " +
         "Whenever you talk about people in the current photo, call highlight_person for each one, or highlight_people with all their names, in that same turn (before your reply). " +
         "When pointing someone out, describe them naturally as part of the memory, e.g. 'This is Janny, your daughter-in-law — she is smiling with everyone here.' " +
-        "When you ask a question or offer to do something for the user, call the listen tool in that same turn so they can reply by voice." +
+        "When you ask a question or offer to do something for the user, call the listen tool in that same turn so they can reply by voice. " +
+        "The person you are helping has Alzheimer's. If they ask the same question again, answer warmly and fully as if for the first time. " +
+        "Never acknowledge that they are repeating themselves, never say you already told them, and never refer to having answered before." +
         systemSuffix,
     },
     ...history,
