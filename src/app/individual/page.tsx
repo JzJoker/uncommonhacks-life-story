@@ -1,41 +1,99 @@
 import type { Metadata } from "next";
-import Button from "@/components/dashboard/Button";
 import ChapterHeader from "@/components/individual/ChapterHeader";
-import PhotoCard from "@/components/individual/PhotoCard";
+import IndividualAlbumView, {
+  type PhotoCardData,
+} from "@/components/individual/IndividualAlbumView";
 
 export const metadata: Metadata = {
   title: "Early Childhood — LifeStory",
   description: "Explore memories from this chapter",
 };
 
+const photoCardsRaw: PhotoCardData[] = [
+  {
+    id: "woods-walk",
+    src: "/dashboard/photo-1.png",
+    quote: "“Walk around the woods...”",
+    attribution: "~ Kolbe, your son",
+  },
+  {
+    id: "first-birthday",
+    src: "/dashboard/photo-2.png",
+    quote: "“Your first birthday cake!”",
+    attribution: "~ Mom",
+  },
+  {
+    id: "backyard-swing",
+    src: "/demo/photo.jpg",
+    quote: "“You loved this swing in the backyard.”",
+    attribution: "~ Dad",
+  },
+  {
+    id: "family-picnic",
+    src: "/dashboard/photo-1.png",
+    quote: "“Our first family picnic at the lake.”",
+    attribution: "~ Sarah, your sister",
+  },
+  {
+    id: "woods-walk",
+    src: "/dashboard/photo-1.png",
+    quote: "“Walk around the woods...”",
+    attribution: "~ Kolbe, your son",
+  },
+  {
+    id: "first-birthday",
+    src: "/dashboard/photo-2.png",
+    quote: "“Your first birthday cake!”",
+    attribution: "~ Mom",
+  },
+  {
+    id: "backyard-swing",
+    src: "/demo/photo.jpg",
+    quote: "“You loved this swing in the backyard.”",
+    attribution: "~ Dad",
+  },
+  {
+    id: "family-picnic",
+    src: "/dashboard/photo-1.png",
+    quote: "“Our first family picnic at the lake.”",
+    attribution: "~ Sarah, your sister",
+  },
+  {
+    id: "woods-walk",
+    src: "/dashboard/photo-1.png",
+    quote: "“Walk around the woods...”",
+    attribution: "~ Kolbe, your son",
+  },
+  {
+    id: "first-birthday",
+    src: "/dashboard/photo-2.png",
+    quote: "“Your first birthday cake!”",
+    attribution: "~ Mom",
+  },
+  {
+    id: "backyard-swing",
+    src: "/demo/photo.jpg",
+    quote: "“You loved this swing in the backyard.”",
+    attribution: "~ Dad",
+  },
+  {
+    id: "family-picnic",
+    src: "/dashboard/photo-1.png",
+    quote: "“Our first family picnic at the lake.”",
+    attribution: "~ Sarah, your sister",
+  },
+];
+
+const photoCards: PhotoCardData[] = photoCardsRaw.map((card, index) => ({
+  ...card,
+  id: `${card.id}-${index}`,
+}));
+
 export default function IndividualPage() {
   return (
-    <div className="flex min-h-full flex-col overflow-hidden rounded-xl h-dvh bg-cream-100 p-px text-ink">
+    <div className="flex h-dvh min-h-0 flex-col overflow-hidden rounded-xl bg-cream-100 p-px text-ink">
       <ChapterHeader title="Early Childhood" />
-      <div className="w-full h-full p-12  bg-white/40 ">
-        <div className="flex flex-1 bg-cream-100 w-full  rounded-xl overflow-hidden h-full items-center justify-center gap-px">
-          <div className="w-full h-full grid bg-cream-50 place-items-center">
-            <PhotoCard />
-          </div>
-
-          <div className="w-full h-full grid bg-cream-50  place-items-center">
-            <section className="flex max-w-[360px] flex-col items-start justify-center gap-6">
-              <h2 className="font-hand text-[28px] leading-normal text-ink">
-                Andy Lin
-              </h2>
-              <p className="text-base font-light leading-normal text-ink">
-                Family members can create a private digital space full of
-                photos, stories, and voices that celebrate Andy&apos;s life and
-                bring him closer to people he loves.
-              </p>
-              <div className="flex flex-wrap gap-3">
-                <Button text="See more of Justin" variant="primary" />
-                <Button text="Ask a question" />
-              </div>
-            </section>
-          </div>
-        </div>
-      </div>
+      <IndividualAlbumView photoCards={photoCards} />
     </div>
   );
 }

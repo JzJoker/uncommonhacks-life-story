@@ -19,7 +19,8 @@ type ButtonProps = {
   text?: string;
   variant?: ButtonVariant;
   href?: string;
-  onClick?: (event: React.MouseEvent<HTMLButtonElement>) => void;
+  onClick?: (event?: React.MouseEvent<HTMLButtonElement>) => void;
+  disabled?: boolean;
 };
 
 export default function Button({
@@ -28,6 +29,7 @@ export default function Button({
   variant = "default",
   href,
   onClick,
+  disabled = false,
 }: ButtonProps) {
   const classes = `${baseClass} ${variants[variant]} ${className}`.trim();
 
@@ -36,7 +38,11 @@ export default function Button({
       <Link
         href={href}
         className={classes}
-        onClick={(event) => event.stopPropagation()}
+        onClick={(event) => {
+          event.stopPropagation();
+          onClick?.();
+        }}
+        aria-disabled={disabled}
       >
         {text}
       </Link>
@@ -44,7 +50,12 @@ export default function Button({
   }
 
   return (
-    <button type="button" className={classes} onClick={onClick}>
+    <button
+      type="button"
+      className={classes}
+      onClick={onClick}
+      disabled={disabled}
+    >
       {text}
     </button>
   );
