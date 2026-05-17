@@ -368,15 +368,22 @@ export default function IndividualAlbumView({
               const card = photoCards[cardIndex];
               if (!card) return null;
               return (
-                <motion.button
+                <motion.div
                   key={`grid-${cardIndex}`}
-                  type="button"
+                  role="button"
+                  tabIndex={0}
                   variants={cardVariants}
                   style={{ rotate: `${tiltForIndex(cardIndex)}deg` }}
                   whileHover={{ rotate: 0, scale: 1.02 }}
                   whileTap={{ scale: 0.97 }}
                   onClick={() => handleCardSelect(cardIndex)}
-                  className="w-full cursor-pointer border-0 bg-transparent p-0 text-left"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      handleCardSelect(cardIndex);
+                    }
+                  }}
+                  className="w-full cursor-pointer text-left"
                 >
                   <PhotoCard
                     className="w-full transition-transform duration-300"
@@ -385,7 +392,7 @@ export default function IndividualAlbumView({
                     attribution={card.attribution}
                     messageAudioUrl={card.messageAudioUrl}
                   />
-                </motion.button>
+                </motion.div>
               );
             })}
           </motion.div>
