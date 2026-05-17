@@ -1,17 +1,35 @@
+"use client";
+
+import { useEffect } from "react";
 import { Sparkle } from "lucide-react";
 import { TypewriterText } from "@/components/TypewriterText";
+import { speak, stopSpeaking, type SpeakOptions } from "@/lib/speak";
 
 type AgentPanelProps = {
   message: string;
   actions?: React.ReactNode;
   className?: string;
+  /** Set false to render the panel silently (no TTS). */
+  speakMessage?: boolean;
+  /** Override voice / model / settings for this surface (e.g. cloned voice). */
+  voiceOptions?: SpeakOptions;
 };
 
 export function AgentPanel({
   message,
   actions,
   className = "",
+  speakMessage = true,
+  voiceOptions,
 }: AgentPanelProps) {
+  useEffect(() => {
+    if (!speakMessage || !message?.trim()) return;
+    speak(message, voiceOptions).catch((err) => {
+      console.error("[AgentPanel] TTS failed", err);
+    });
+    return () => stopSpeaking();
+  }, [message, speakMessage, voiceOptions]);
+
   return (
     <section
       aria-label="Narrator agent"
