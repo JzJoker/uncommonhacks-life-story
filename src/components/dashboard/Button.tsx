@@ -19,6 +19,8 @@ type ButtonProps = {
   text?: string;
   variant?: ButtonVariant;
   href?: string;
+  onClick?: () => void;
+  disabled?: boolean;
 };
 
 export default function Button({
@@ -26,6 +28,8 @@ export default function Button({
   text = "Button",
   variant = "default",
   href,
+  onClick,
+  disabled = false,
 }: ButtonProps) {
   const classes = `${baseClass} ${variants[variant]} ${className}`.trim();
 
@@ -34,7 +38,11 @@ export default function Button({
       <Link
         href={href}
         className={classes}
-        onClick={(event) => event.stopPropagation()}
+        onClick={(event) => {
+          event.stopPropagation();
+          onClick?.();
+        }}
+        aria-disabled={disabled}
       >
         {text}
       </Link>
@@ -42,7 +50,12 @@ export default function Button({
   }
 
   return (
-    <button type="button" className={classes}>
+    <button
+      type="button"
+      className={classes}
+      onClick={onClick}
+      disabled={disabled}
+    >
       {text}
     </button>
   );

@@ -4,15 +4,21 @@ type PhotoCardProps = {
   src?: string;
   quote?: string;
   attribution?: string;
+  className?: string;
+  compact?: boolean;
 };
 
 export default function PhotoCard({
   src = "/dashboard/photo-1.png",
   quote = "“Walk around the woods...”",
   attribution = "~ Kolbe, your son",
+  className = "",
+  compact = false,
 }: PhotoCardProps) {
   return (
-    <article className="flex w-[360px] shrink-0 flex-col items-center gap-4 rounded border border-cream-100 bg-polaroid p-4 shadow-[4px_4px_4px_rgba(0,0,0,0.04)]">
+    <article
+      className={`flex w-[360px] shrink-0 flex-col items-center gap-4 rounded border border-cream-100 bg-polaroid p-4 shadow-[4px_4px_4px_rgba(0,0,0,0.04)] ${className}`.trim()}
+    >
       <div className="relative h-[252px] w-full overflow-hidden rounded">
         <Image src={src} alt="" fill className="object-cover" sizes="360px" />
       </div>
