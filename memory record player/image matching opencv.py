@@ -3,25 +3,54 @@ import numpy as np
 import requests
 import os
 import torch
+import torch.nn.functional as F
 from PIL import Image
-from facenet_pytorch import MTCNN, InceptionResnetV1
+from transformers import AutoImageProcessor, AutoModel
 
-ESP32_URL        = "http://10.0.0.94:81/jpeg"
-DATASET_FOLDER  = "image_dataset"
-output_folder    = "match_results"
+ESP32_URL        = "http://192.168.1.184:81/jpeg"
+DATASET_FOLDER = "memory record player/image_dataset"
+output_folder = "memory record player/match_results"
 
 MAX_KEYPOINTS    = 3000   # more = slower but more accurate
 MATCH_THRESHOLD  = 0.80  # Lowe's ratio test — lower = stricter (0.6–0.8 typical)
 GOOD_MATCH_MIN   = 20     # minimum RANSAC inliers to consider a positive match
 RANSAC_THRESHOLD = 5.0    # max pixel reprojection error for RANSAC inlier (lower = stricter)
+TOP_DINO_MATCHES   = 5     # number of top DINO matches to consider for final decision
 
-FACE_SIMILARITY_THRESHOLD = 0.5  # Adjust based on your needs (0.6–0.9 typical)
+DINO_MODEL_NAME = "facebook/dinov2-base"
 
-# FaceNet Setup
-mtcnn = MTCNN(thresholds=[0.5, 0.6, 0.6])  # default is [0.6, 0.7, 0.7]
-resnet = InceptionResnetV1(pretrained='vggface2').eval()
+device = "cuda" if torch.cuda.is_available() else "cpu" #uses RTX5060 cuda cores, if not available use CPU
+dino_processor = AutoImageProcessor.from_pretrained(DINO_MODEL_NAME) 
+dino_model = AutoModel.from_pretrained(DINO_MODEL_NAME).to(device) #automodel automa
+dino_model.eval() #set model to evaluation mode (disables dropout, etc.) since we're only doing inference
 
-def get_image_from_esp32():
+#dinov3 splits the image into patches and processes them through a vision transformer
+#output is a fixed lenght embedding vector that assigns values to each patch
+
+
+def get_dino_embedding(image_bgr):
+    image_rgb = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB) #converts BGR to RGB format for DINOv3
+    pil_image = Image.fromarray(image_rgb) #converts numpy array to PILLOW image
+
+    inputs = dino_processor(images=pil_image, return_tensors="pt").to(device) #preprocesses image and converts to PyTorch tensor, moves to GPU if available
+
+    with torch.no_grad():
+        outputs = dino_model(**inputs)
+
+    if hasattr(outputs, "pooler_output") and outputs.pooler_output is not None:
+        embedding = outputs.pooler_output
+    else:
+        embedding = outputs.last_hidden_state[:, 0, :] #grabs image embedding from the [CLS] token
+
+    embedding = F.normalize(embedding, p=2, dim=1)
+
+    return embedding
+
+def get_dino_similarity(embedding1, embedding2):
+    similarity = torch.matmul(embedding1, embedding2.T).item()
+    return similarity
+
+def get_image_from_esp32(): 
     response = requests.get(ESP32_URL)
     image_array = np.frombuffer(response.content, np.uint8)
     physical_image = cv2.imdecode(image_array, cv2.IMREAD_COLOR)
@@ -31,46 +60,40 @@ def get_digital_image(image_path):
     digital_image = cv2.imread(image_path, cv2.IMREAD_COLOR)
     return digital_image
 
-def get_face_embedding(bgr_img):
-    rgb_img = cv2.cvtColor(bgr_img, cv2.COLOR_BGR2RGB)
-    pil_img = Image.fromarray(rgb_img)
-    face    = mtcnn(pil_img)  # detects and crops face to 160x160
-    print(f"Face detected: {'YES' if face is not None else 'NO'}")
-    if face is None:
-        return None
-    with torch.no_grad():
-        embedding = resnet(face.unsqueeze(0))  # get 512-dim embedding
-    return torch.nn.functional.normalize(embedding, dim=-1)
-
-def face_similarity(emb1, emb2):
-    return (emb1 @ emb2.T).item()  # cosine similarity, -1 to 1
-
 # Create output folder if it doesn't exist
 os.makedirs(output_folder, exist_ok=True)
 
 # Fetch ESP32 image once before the loop
-im1_bgr  = get_image_from_esp32()
-im1_gray = cv2.cvtColor(im1_bgr, cv2.COLOR_BGR2GRAY) #grayscale
-im1_gray = cv2.flip(im1_gray, 1)  # 1 = horizontal flip, 0 = vertical, -1 = both
-im1_bgr  = cv2.flip(im1_bgr, 1)
+physical_image = get_image_from_esp32()
+physical_image = cv2.flip(physical_image, 1)  # 1 = horizontal flip, 0 = vertical, -1 = both
 
-esp32_embedding = get_face_embedding(im1_bgr)
+im1_gray = cv2.cvtColor(physical_image, cv2.COLOR_BGR2GRAY) #grayscale
+
+# DINOv3 embedding for ESP32 image
+esp32_dino_embedding = get_dino_embedding(physical_image)
 
 orb     = cv2.ORB_create(nfeatures=MAX_KEYPOINTS)
-matcher = cv2.BFMatcher(cv2.DESCRIPTOR_MATCHER_BRUTEFORCE_HAMMING, crossCheck=False) #finds hamming distance between descriptors
+matcher = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=False) #finds hamming distance between descriptors
 
 # Save ESP32 keypoints once
 keypoints1, descriptors1 = orb.detectAndCompute(im1_gray, None)
 im1_display = cv2.drawKeypoints(im1_gray, keypoints1, None, color=(255,0,0), flags=cv2.DRAW_MATCHES_FLAGS_DEFAULT) #draws keypoints
 cv2.imwrite("esp32imagekp.jpg", im1_display)
 
+results = []
+
 for filename in os.listdir(DATASET_FOLDER):
     if not filename.lower().endswith(('.png', '.jpg', '.jpeg')):
         continue
 
-    path    = os.path.join(DATASET_FOLDER, filename)
-    im2_bgr  = get_digital_image(path)
-    im2_gray = cv2.cvtColor(im2_bgr, cv2.COLOR_BGR2GRAY) #grayscale
+    path = os.path.join(DATASET_FOLDER, filename)
+
+    digital_image = get_digital_image(path)
+    im2_gray = cv2.cvtColor(digital_image, cv2.COLOR_BGR2GRAY) #grayscale
+
+    # DINOv3 similarity score
+    digital_dino_embedding = get_dino_embedding(digital_image) #compute DINO embedding for digital image
+    dino_score = get_dino_similarity(esp32_dino_embedding, digital_dino_embedding) #compute cosine similarity between ESP32 and digital embeddings
 
     keypoints1, descriptors1 = orb.detectAndCompute(im1_gray, None)
     keypoints2, descriptors2 = orb.detectAndCompute(im2_gray, None)
@@ -97,6 +120,7 @@ for filename in os.listdir(DATASET_FOLDER):
 
     if len(good_matches) < 4:
         print(f"{filename}: not enough matches for homography, skipping") #need at least 4 matches to compute homography
+        print(f"{filename}: DINOv3 similarity — {dino_score:.4f}")
         continue
 
     points1 = np.zeros((len(good_matches), 2), dtype=np.float32)
@@ -105,23 +129,41 @@ for filename in os.listdir(DATASET_FOLDER):
     for i, match in enumerate(good_matches):
         points1[i, :] = keypoints1[match.queryIdx].pt
         points2[i, :] = keypoints2[match.trainIdx].pt
-    h, mask = cv2.findHomography(points1, points2, cv2.RANSAC, RANSAC_THRESHOLD)
+    h, mask = cv2.findHomography(points1, points2, cv2.RANSAC, RANSAC_THRESHOLD) #uses RANSAC to find homography and filter out outliers, returns mask of inliers
 
-    inlier_matches = [good_matches[i] for i in range(len(good_matches)) if mask[i]]
+    inlier_matches = []
+
+    if mask is not None:
+        mask = mask.ravel().tolist()
+        inlier_matches = [good_matches[i] for i in range(len(good_matches)) if mask[i]]
 
     is_match = len(inlier_matches) >= GOOD_MATCH_MIN
+    print(f"{filename}: {len(inlier_matches)} inliers — {'YES' if is_match else 'NO'}")
+    print(f"{filename}: DINOv3 similarity — {dino_score:.4f}")
 
-    # Face similarity — only runs if both images have a detected face
-    face_result = "no face"
-    if esp32_embedding is not None:
-        ref_embedding = get_face_embedding(im2_bgr)
-        if ref_embedding is not None:
-            score       = face_similarity(esp32_embedding, ref_embedding)
-            face_result = f"{score:.4f} ({'MATCH' if score >= FACE_SIMILARITY_THRESHOLD else 'NO MATCH'})"
-
-    print(f"{filename}: {len(inlier_matches)} inliers — {'YES' if is_match else 'NO'} | face: {face_result}")
+    results.append({
+        "filename": filename,
+        "inliers": len(inlier_matches),
+        "dino_score": dino_score,
+        "is_match": is_match
+    })
 
     im_matches = cv2.drawMatches(im1_gray, keypoints1, im2_gray, keypoints2, inlier_matches, None)
     cv2.imwrite(os.path.join(output_folder, f"matches_{filename}"), im_matches)
+
+if len(results) > 0:
+    best_orb = max(results, key=lambda x: x["inliers"]) 
+    best_dino = max(results, key=lambda x: x["dino_score"])
+
+    print("\n===== BEST ORB/RANSAC MATCH =====")
+    print(f"File: {best_orb['filename']}")
+    print(f"Inliers: {best_orb['inliers']}")
+    print(f"DINOv3 similarity: {best_orb['dino_score']:.4f}")
+    print(f"Match: {'YES' if best_orb['is_match'] else 'NO'}")
+
+    print("\n===== BEST DINOv3 SIMILARITY MATCH =====")
+    print(f"File: {best_dino['filename']}")
+    print(f"DINOv3 similarity: {best_dino['dino_score']:.4f}")
+    print(f"Inliers: {best_dino['inliers']}")
 
 print(f"\nDone. Results saved to '{output_folder}/'")
