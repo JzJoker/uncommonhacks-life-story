@@ -16,6 +16,7 @@ MATCH_THRESHOLD  = 0.80  # Lowe's ratio test — lower = stricter (0.6–0.8 typ
 GOOD_MATCH_MIN   = 20     # minimum RANSAC inliers to consider a positive match
 RANSAC_THRESHOLD = 5.0    # max pixel reprojection error for RANSAC inlier (lower = stricter)
 TOP_DINO_MATCHES   = 3     # number of top DINO matches to consider for final decision
+DINO_MATCH_MIN   = 0.40    # minimum DINO similarity required to accept final match
 
 DINO_MODEL_NAME = "facebook/dinov2-base"
 
@@ -163,7 +164,7 @@ for candidate in top_dino_candidates:
             mask = mask.ravel().tolist()
             inlier_matches = [good_matches[i] for i in range(len(good_matches)) if mask[i]]
 
-    is_match = len(inlier_matches) >= GOOD_MATCH_MIN #match if minimum threshold is reached
+    is_match = len(inlier_matches) >= GOOD_MATCH_MIN and dino_score >= DINO_MATCH_MIN #match if minimum threshold is reached
 
     results.append({
         "filename": filename,
@@ -176,7 +177,7 @@ for candidate in top_dino_candidates:
     cv2.imwrite(os.path.join(output_folder, f"matches_{filename}"), im_matches)
 
 if len(results) > 0:
-    best_orb = max(results, key=lambda x: x["inliers"]) 
+    confirmed_results = [result for result in results if result["is_match"]]
 
     print("\n===== TOP DINO CANDIDATES WITH ORB RESULTS =====")
     for result in results:
@@ -186,9 +187,21 @@ if len(results) > 0:
         print(f"  Match: {'YES' if result['is_match'] else 'NO'}")
 
     print("\n===== FINAL MATCH =====")
-    print(f"File: {best_orb['filename']}")
-    print(f"Inliers: {best_orb['inliers']}")
-    print(f"DINOv3 similarity: {best_orb['dino_score']:.4f}")
-    print(f"Match: {'YES' if best_orb['is_match'] else 'NO'}")
+
+    if len(confirmed_results) > 0:
+        best_match = max(confirmed_results, key=lambda x: x["inliers"])
+
+        print(f"File: {best_match['filename']}")
+        print(f"Inliers: {best_match['inliers']}")
+        print(f"DINOv3 similarity: {best_match['dino_score']:.4f}")
+        print("Match: YES")
+    else:
+        best_dino = max(results, key=lambda x: x["dino_score"])
+
+        print("No confident match found")
+        print(f"Closest DINO candidate: {best_dino['filename']}")
+        print(f"DINOv3 similarity: {best_dino['dino_score']:.4f}")
+        print(f"ORB/RANSAC inliers: {best_dino['inliers']}")
+        print("Match: NO")
 
 print(f"\nDone. Results saved to '{output_folder}/'")
