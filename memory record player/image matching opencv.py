@@ -17,8 +17,8 @@ GOOD_MATCH_MIN   = 15     # minimum RANSAC inliers to consider a positive match
 RANSAC_THRESHOLD = 5.0    # max pixel reprojection error for RANSAC inlier (lower = stricter)
 TOP_DINO_MATCHES   = 3     # number of top DINO matches to consider for final decision
 DINO_DECENT_MIN   = 0.25    # minimum DINO similarity to consider a decent match
-DINO_STRONG_MIN  = 0.35    # strong DINO similarity can accept match even if ORB is weak
-DINO_MARGIN_MIN  = 0.08    # DINO must beat second-best score by this much to override ORB
+DINO_STRONG_MIN  = 0.35    # strong DINO similarity can accept match even if ORB is weak,
+DINO_MARGIN_MIN  = 0.08    # DINO must beat second-best score by this much to override ORB 
 
 DINO_MODEL_NAME = "facebook/dinov2-base"
 
@@ -52,22 +52,29 @@ def get_dino_embedding(image_bgr):
 def get_dino_similarity(embedding1, embedding2):
     similarity = torch.matmul(embedding1, embedding2.T).item() #dot products both embeddings and returns single float
     return similarity 
+    #tells us how close embeddings are to each other, which reflects semantic similarity
 
 def classify_match(dino_score, inliers, dino_margin, is_best_dino):
-    orb_strong = inliers >= GOOD_MATCH_MIN
-    dino_decent = dino_score >= DINO_DECENT_MIN
-    dino_strong = dino_score >= DINO_STRONG_MIN and dino_margin >= DINO_MARGIN_MIN and is_best_dino
+    orb_strong = inliers >= GOOD_MATCH_MIN 
+    dino_decent = dino_score >= DINO_DECENT_MIN #DINO is good enough, check if ORB is STRONG
+    dino_strong = dino_score >= DINO_STRONG_MIN and dino_margin >= DINO_MARGIN_MIN and is_best_dino 
+    #dino is ONLY strong if its above strong threshold AND beats second-best by margin
+    #this works in cases where DINO is high across the board, use ORB to pick
 
     if dino_strong:
-        return True, "DINO strong"
+        return True, "DINO strong" #reasoning is DINO IS VERY STRONG, so we trust it even if ORB is weak
 
     if orb_strong and dino_decent:
-        return True, "ORB strong + DINO decent"
+        return True, "ORB strong + DINO decent" #reasoning is ORB IS STRONG, and DINO is DECENT, so we trust it. 
+        #eliminates ORB false positives that would have otherwise been accepted if we relied on ORB alone, since
+        #ITS VERY HARD for a false positive ORB match to also have a decent semantic DINO score, so this combo is pretty reliable
 
     if orb_strong and not dino_decent:
         return False, "ORB false positive"
+        #ORB IS STRONG but DINO IS WEAK, so it's PROBABLY FALSE POSITIVE.
 
     return False, "No confident match"
+    #both ORB and DINO are weak, so we don't have confidence in this match
 
 def get_image_from_esp32(): 
     response = requests.get(ESP32_URL)
@@ -133,17 +140,17 @@ for filename in os.listdir(DATASET_FOLDER):
 dino_candidates = sorted(dino_candidates, key=lambda x: x["dino_score"], reverse=True) #sorts all digital images by DINO score
 top_dino_candidates = dino_candidates[:TOP_DINO_MATCHES] #shortlists top DINO matches, 3 for now
 
-best_dino_score = top_dino_candidates[0]["dino_score"]
+best_dino_score = top_dino_candidates[0]["dino_score"] #identifies best DINO score
 
 if len(top_dino_candidates) > 1:
-    second_dino_score = top_dino_candidates[1]["dino_score"]
+    second_dino_score = top_dino_candidates[1]["dino_score"] #identifies second-best DINO
 else:
-    second_dino_score = 0
+    second_dino_score = 0 #if only 1 strong candidate, set second to zero
 
-dino_margin = best_dino_score - second_dino_score
+dino_margin = best_dino_score - second_dino_score #differnece between first and second
 
 # Second loop: run ORB/RANSAC only on the top DINO matches
-for candidate in top_dino_candidates:
+for candidate in top_dino_candidates: 
     filename = candidate["filename"]
     im2_gray = candidate["im2_gray"]
     dino_score = candidate["dino_score"]
@@ -224,9 +231,9 @@ if len(results) > 0:
         best_match = max(
             confirmed_results,
             key=lambda x: (
-                x["match_reason"] == "DINO strong",
-                x["inliers"] if x["match_reason"] != "DINO strong" else x["dino_score"],
-                x["dino_score"]
+                x["match_reason"] == "DINO strong", #if DINO is strong, match regardless of ORB
+                x["inliers"] if x["match_reason"] != "DINO strong" else x["dino_score"], #if DINO is not strong, rely on ORB
+                x["dino_score"] 
             )
         )
 
@@ -236,7 +243,7 @@ if len(results) > 0:
         print(f"Reason: {best_match['match_reason']}")
         print("Match: YES")
     else:
-        best_dino = max(results, key=lambda x: x["dino_score"])
+        best_dino = max(results, key=lambda x: x["dino_score"])  
 
         print("No confident match found")
         print(f"Closest DINO candidate: {best_dino['filename']}")
