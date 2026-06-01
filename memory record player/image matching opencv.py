@@ -219,7 +219,7 @@ if len(results) > 0:
 
     print("\n===== TOP DINO CANDIDATES WITH ORB RESULTS =====")
     for result in results:
-        print(f"{result['filename']}:")
+        print(f"{result['filename']}:") 
         print(f"  DINOv3 similarity: {result['dino_score']:.4f}")
         print(f"  ORB/RANSAC inliers: {result['inliers']}")
         print(f"  Match: {'YES' if result['is_match'] else 'NO'}")
@@ -232,13 +232,13 @@ if len(results) > 0:
             confirmed_results,
             key=lambda x: (
                 x["match_reason"] == "DINO strong", #if DINO is strong, match regardless of ORB
-                x["inliers"] if x["match_reason"] != "DINO strong" else x["dino_score"], #if DINO is not strong, rely on ORB
+                x["inliers"] if x["match_reason"] != "DINO strong" else x["dino_score"], 
                 x["dino_score"] 
             )
         )
 
-        print(f"File: {best_match['filename']}")
-        print(f"Inliers: {best_match['inliers']}")
+        print(f"File: {best_match['filename']}") 
+        print(f"Inliers: {best_match['inliers']}") #number of ORB inliers, but only used as tiebreaker if DINO isn't strong
         print(f"DINOv3 similarity: {best_match['dino_score']:.4f}")
         print(f"Reason: {best_match['match_reason']}")
         print("Match: YES")
