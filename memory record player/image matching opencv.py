@@ -7,16 +7,18 @@ import torch.nn.functional as F
 from PIL import Image
 from transformers import AutoImageProcessor, AutoModel
 
-ESP32_URL        = "http://192.168.1.184:81/jpeg"
+ESP32_URL        = "http://192.168.2.151:81/jpeg"
 DATASET_FOLDER = "memory record player/image_dataset"
 output_folder = "memory record player/match_results"
 
-MAX_KEYPOINTS    = 3000   # more = slower but more accurate
-MATCH_THRESHOLD  = 0.80  # Lowe's ratio test — lower = stricter (0.6–0.8 typical)
-GOOD_MATCH_MIN   = 20     # minimum RANSAC inliers to consider a positive match
+MAX_KEYPOINTS    = 3000  # more = slower but more accurate
+MATCH_THRESHOLD  = 0.8 # Lowe's ratio test — lower = stricter (0.6–0.8 typical)
+GOOD_MATCH_MIN   = 15     # minimum RANSAC inliers to consider a positive match
 RANSAC_THRESHOLD = 5.0    # max pixel reprojection error for RANSAC inlier (lower = stricter)
 TOP_DINO_MATCHES   = 3     # number of top DINO matches to consider for final decision
-DINO_MATCH_MIN   = 0.40    # minimum DINO similarity required to accept final match
+DINO_DECENT_MIN   = 0.25    # minimum DINO similarity to consider a decent match
+DINO_STRONG_MIN  = 0.35    # strong DINO similarity can accept match even if ORB is weak
+DINO_MARGIN_MIN  = 0.08    # DINO must beat second-best score by this much to override ORB
 
 DINO_MODEL_NAME = "facebook/dinov2-base"
 
@@ -50,6 +52,22 @@ def get_dino_embedding(image_bgr):
 def get_dino_similarity(embedding1, embedding2):
     similarity = torch.matmul(embedding1, embedding2.T).item() #dot products both embeddings and returns single float
     return similarity 
+
+def classify_match(dino_score, inliers, dino_margin, is_best_dino):
+    orb_strong = inliers >= GOOD_MATCH_MIN
+    dino_decent = dino_score >= DINO_DECENT_MIN
+    dino_strong = dino_score >= DINO_STRONG_MIN and dino_margin >= DINO_MARGIN_MIN and is_best_dino
+
+    if dino_strong:
+        return True, "DINO strong"
+
+    if orb_strong and dino_decent:
+        return True, "ORB strong + DINO decent"
+
+    if orb_strong and not dino_decent:
+        return False, "ORB false positive"
+
+    return False, "No confident match"
 
 def get_image_from_esp32(): 
     response = requests.get(ESP32_URL)
@@ -115,11 +133,21 @@ for filename in os.listdir(DATASET_FOLDER):
 dino_candidates = sorted(dino_candidates, key=lambda x: x["dino_score"], reverse=True) #sorts all digital images by DINO score
 top_dino_candidates = dino_candidates[:TOP_DINO_MATCHES] #shortlists top DINO matches, 3 for now
 
+best_dino_score = top_dino_candidates[0]["dino_score"]
+
+if len(top_dino_candidates) > 1:
+    second_dino_score = top_dino_candidates[1]["dino_score"]
+else:
+    second_dino_score = 0
+
+dino_margin = best_dino_score - second_dino_score
+
 # Second loop: run ORB/RANSAC only on the top DINO matches
 for candidate in top_dino_candidates:
     filename = candidate["filename"]
     im2_gray = candidate["im2_gray"]
     dino_score = candidate["dino_score"]
+    is_best_dino = filename == top_dino_candidates[0]["filename"]
 
     keypoints1, descriptors1 = orb.detectAndCompute(im1_gray, None) #detect ORB keypoints and compute descriptors
     keypoints2, descriptors2 = orb.detectAndCompute(im2_gray, None)
@@ -128,11 +156,14 @@ for candidate in top_dino_candidates:
     cv2.imwrite(os.path.join(output_folder, f"kp_{filename}"), im2_display)
 
     if descriptors1 is None or descriptors2 is None:
+        is_match, match_reason = classify_match(dino_score, 0, dino_margin, is_best_dino)
+
         results.append({
             "filename": filename,
             "inliers": 0,
             "dino_score": dino_score,
-            "is_match": False
+            "is_match": is_match,
+            "match_reason": match_reason
         })
         continue
 
@@ -164,13 +195,13 @@ for candidate in top_dino_candidates:
             mask = mask.ravel().tolist()
             inlier_matches = [good_matches[i] for i in range(len(good_matches)) if mask[i]]
 
-    is_match = len(inlier_matches) >= GOOD_MATCH_MIN and dino_score >= DINO_MATCH_MIN #match if minimum threshold is reached
-
+    is_match, match_reason = classify_match(dino_score, len(inlier_matches), dino_margin, is_best_dino) #match if DINO is strong, or if ORB is strong and DINO is decent
     results.append({
         "filename": filename,
         "inliers": len(inlier_matches),
         "dino_score": dino_score,
-        "is_match": is_match
+        "is_match": is_match,
+        "match_reason": match_reason
     })
 
     im_matches = cv2.drawMatches(im1_gray, keypoints1, im2_gray, keypoints2, inlier_matches, None)
@@ -185,15 +216,24 @@ if len(results) > 0:
         print(f"  DINOv3 similarity: {result['dino_score']:.4f}")
         print(f"  ORB/RANSAC inliers: {result['inliers']}")
         print(f"  Match: {'YES' if result['is_match'] else 'NO'}")
+        print(f"  Reason: {result['match_reason']}")
 
     print("\n===== FINAL MATCH =====")
 
     if len(confirmed_results) > 0:
-        best_match = max(confirmed_results, key=lambda x: x["inliers"])
+        best_match = max(
+            confirmed_results,
+            key=lambda x: (
+                x["match_reason"] == "DINO strong",
+                x["inliers"] if x["match_reason"] != "DINO strong" else x["dino_score"],
+                x["dino_score"]
+            )
+        )
 
         print(f"File: {best_match['filename']}")
         print(f"Inliers: {best_match['inliers']}")
         print(f"DINOv3 similarity: {best_match['dino_score']:.4f}")
+        print(f"Reason: {best_match['match_reason']}")
         print("Match: YES")
     else:
         best_dino = max(results, key=lambda x: x["dino_score"])
@@ -202,6 +242,7 @@ if len(results) > 0:
         print(f"Closest DINO candidate: {best_dino['filename']}")
         print(f"DINOv3 similarity: {best_dino['dino_score']:.4f}")
         print(f"ORB/RANSAC inliers: {best_dino['inliers']}")
+        print(f"Reason: {best_dino['match_reason']}")
         print("Match: NO")
 
 print(f"\nDone. Results saved to '{output_folder}/'")
