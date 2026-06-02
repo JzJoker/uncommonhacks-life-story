@@ -7,7 +7,7 @@ import torch.nn.functional as F
 from PIL import Image
 from transformers import AutoImageProcessor, AutoModel
 
-ESP32_URL        = "" #replace with your ESP32 serial output link, the one that ends with /jpeg, the URL is different for every network.
+ESP32_URL        = "" #replace with your own ESP32 URL from esp32cameraserver.ino, include the /jpeg url.
 DATASET_FOLDER = "memory record player/image_dataset"
 output_folder = "memory record player/match_results"
 
@@ -109,7 +109,7 @@ matcher = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=False) #finds hamming dista
 # Save ESP32 keypoints once
 keypoints1, descriptors1 = orb.detectAndCompute(im1_gray, None)
 im1_display = cv2.drawKeypoints(im1_gray, keypoints1, None, color=(255,0,0), flags=cv2.DRAW_MATCHES_FLAGS_DEFAULT) #draws keypoints
-cv2.imwrite(os.path.join(output_folder, "esp32imagekp.jpg"), im1_display)
+cv2.imwrite("esp32imagekp.jpg", im1_display)
 
 results = []
 dino_candidates = []
