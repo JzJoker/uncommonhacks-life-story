@@ -15,6 +15,7 @@ import { supabase } from "@/lib/supabase";
 type FlowState =
   | "empty"
   | "analyzing"
+  | "no-people"
   | "identifying"
   | "relation"
   | "confirm"
@@ -22,6 +23,7 @@ type FlowState =
   | "questionnaire"
   | "narration-record"
   | "message-record"
+  | "generating"
   | "narrating"
   | "modifying"
   | "done";
@@ -55,11 +57,12 @@ function sortByX(boxes: PersonBox[]): PersonBox[] {
   );
 }
 
-function getMessage(state: FlowState, idx: number, total: number, patientName: string, currentPersonName?: string): string {
+function getMessage(state: FlowState, idx: number, total: number, patientName: string, currentPersonName?: string, summary?: string): string {
   const questions = getQuestions(patientName);
   switch (state) {
     case "empty":         return "Ready for memory upload. Please upload an image for cataloging.";
     case "analyzing":     return "Analyzing your image. Looking for familiar figures…";
+    case "no-people":     return "I couldn't find any people in this photo. Please upload a different image.";
     case "identifying":
       if (total === 0) return "Who is this person?";
       if (total === 1) return "I found 1 person in this photo. Who is this?";
@@ -70,9 +73,9 @@ function getMessage(state: FlowState, idx: number, total: number, patientName: s
     case "questionnaire": return questions[idx];
     case "narration-record": return "Record a narration for this photo — introduce the people and describe what's happening.";
     case "message-record":   return `Leave a personal message for ${patientName} — something warm they'll hear whenever they view this memory.`;
-    case "narrating":
-      return `This is Justin, your grandson. In this photo you are standing next to him at the boardwalk. You used to take him to go rollerblading and he remembers laughing whenever he sped past you!`;
-    case "modifying":     return "Edit the story for this memory.";
+    case "generating":    return "Generating memory summary…";
+    case "narrating":     return summary || "Does this summary look right?";
+    case "modifying":     return "Edit the summary below.";
     case "done":          return "Saved. The narrator will tell this story whenever you open the memory.";
   }
 }
@@ -92,16 +95,17 @@ export function NewMemoryForm({ patientId, patientName }: { patientId: string; p
   const [isSaving, setIsSaving] = useState(false);
   const [narrationBlob, setNarrationBlob] = useState<Blob | null>(null);
   const [messageBlob, setMessageBlob] = useState<Blob | null>(null);
-  const [existingPeople, setExistingPeople] = useState<string[]>([]);
+  const [generatedSummary, setGeneratedSummary] = useState<string | null>(null);
+  const [existingPeople, setExistingPeople] = useState<{ name: string; relation: string | null }[]>([]);
 
   useEffect(() => {
     supabase
       .from("friends_family")
-      .select("name")
+      .select("name, relation")
       .eq("patient_id", patientId)
       .order("name")
       .then(({ data }) => {
-        if (data) setExistingPeople(data.map((p) => p.name));
+        if (data) setExistingPeople(data.map((p) => ({ name: p.name, relation: p.relation ?? null })));
       });
   }, [patientId]);
 
@@ -110,9 +114,10 @@ export function NewMemoryForm({ patientId, patientName }: { patientId: string; p
 
   useEffect(() => {
     if (flowState !== "analyzing" || isDetecting) return;
-    setSortedBoxes(sortByX(boxes));
+    const sorted = sortByX(boxes);
+    setSortedBoxes(sorted);
     setPersonIndex(0);
-    setFlowState("identifying");
+    setFlowState(sorted.length === 0 ? "no-people" : "identifying");
   }, [isDetecting, flowState, boxes]);
 
   const handleImageChange = (file: File | null) => {
@@ -128,15 +133,33 @@ export function NewMemoryForm({ patientId, patientName }: { patientId: string; p
 
   const advance = (name: string) => {
     const trimmed = name.trim();
-    if (trimmed && !existingPeople.includes(trimmed)) {
-      setExistingPeople((prev) => [...prev, trimmed].sort());
+    setPersonNames((prev) => { const next = [...prev]; next[personIndex] = trimmed; return next; });
+
+    const existing = trimmed ? existingPeople.find((p) => p.name === trimmed) : null;
+    if (existing) {
+      advanceRelation(existing.relation ?? "");
+    } else {
+      if (trimmed) {
+        setExistingPeople((prev) =>
+          [...prev, { name: trimmed, relation: null }].sort((a, b) => a.name.localeCompare(b.name))
+        );
+      }
+      if (!trimmed) {
+        advanceRelation("");
+      } else {
+        setFlowState("relation");
+      }
     }
-    setPersonNames((prev) => { const next = [...prev]; next[personIndex] = name; return next; });
-    setFlowState("relation");
   };
 
   const advanceRelation = (relation: string) => {
     setPersonRelations((prev) => { const next = [...prev]; next[personIndex] = relation; return next; });
+    const currentName = personNames[personIndex];
+    if (currentName && relation) {
+      setExistingPeople((prev) =>
+        prev.map((p) => p.name === currentName ? { ...p, relation } : p)
+      );
+    }
     if (personIndex < sortedBoxes.length - 1) {
       setPersonIndex((i) => i + 1);
       setFlowState("identifying");
@@ -167,7 +190,35 @@ export function NewMemoryForm({ patientId, patientName }: { patientId: string; p
     setQuestionAnswers([]);
     setNarrationBlob(null);
     setMessageBlob(null);
+    setGeneratedSummary(null);
   }, []);
+
+  const generateSummaryAndPreview = useCallback(async () => {
+    setFlowState("generating");
+    try {
+      const res = await fetch("/api/summarize", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          people: sortedBoxes.map((_, i) => ({
+            name: personNames[i] ?? "",
+            relation: personRelations[i] ?? null,
+          })),
+          answers: {
+            whoIsThis:    questionAnswers[0] ?? "",
+            whatsGoingOn: questionAnswers[1] ?? "",
+            recognize:    questionAnswers[2] ?? "",
+            upset:        questionAnswers[3] ?? "",
+          },
+        }),
+      });
+      const data = await res.json();
+      setGeneratedSummary((data as { summary?: string }).summary ?? "");
+    } catch {
+      setGeneratedSummary("");
+    }
+    setFlowState("narrating");
+  }, [sortedBoxes, personNames, personRelations, questionAnswers]);
 
   const handleSave = useCallback(async () => {
     if (!imageFile || !naturalSize) return;
@@ -185,7 +236,7 @@ export function NewMemoryForm({ patientId, patientName }: { patientId: string; p
         questionAnswers[2] ?? "",
         questionAnswers[3] ?? "",
       ];
-      await saveMemory({ patientId, imageFile, naturalSize, people, answers, narrationBlob, messageBlob });
+      await saveMemory({ patientId, imageFile, naturalSize, people, answers, narrationBlob, messageBlob, summary: generatedSummary ?? undefined });
       setFlowState("done");
     } catch (err) {
       console.error(err);
@@ -193,7 +244,7 @@ export function NewMemoryForm({ patientId, patientName }: { patientId: string; p
     } finally {
       setIsSaving(false);
     }
-  }, [patientId, imageFile, naturalSize, sortedBoxes, personNames, personRelations, questionAnswers, narrationBlob, messageBlob]);
+  }, [patientId, imageFile, naturalSize, sortedBoxes, personNames, personRelations, questionAnswers, narrationBlob, messageBlob, generatedSummary]);
 
   const handleBoxDrawn = useCallback(
     (bbox: [number, number, number, number]) => {
@@ -238,6 +289,7 @@ export function NewMemoryForm({ patientId, patientName }: { patientId: string; p
             sortedBoxes.length,
             patientName,
             personNames[personIndex],
+            generatedSummary ?? undefined,
           )}
           actions={
             <Actions
@@ -247,18 +299,19 @@ export function NewMemoryForm({ patientId, patientName }: { patientId: string; p
               onRelationSave={advanceRelation}
               onRelationSkip={() => advanceRelation("")}
               setFlowState={setFlowState}
-              narratingMessage={getMessage("narrating", 0, 0, patientName)}
+              narratingMessage={generatedSummary ?? ""}
+              onSaveModified={(text) => { setGeneratedSummary(text); setFlowState("narrating"); }}
               onAddMore={handleReset}
               onViewLifeStory={() => router.push(`/patient/${patientId}`)}
               onNextQuestion={advanceQuestion}
               isLastQuestion={questionIndex === questions.length - 1}
               onNarrationSave={(blob) => { setNarrationBlob(blob); setFlowState("message-record"); }}
               onNarrationSkip={() => setFlowState("message-record")}
-              onMessageSave={(blob) => { setMessageBlob(blob); setFlowState("narrating"); }}
-              onMessageSkip={() => setFlowState("narrating")}
+              onMessageSave={(blob) => { setMessageBlob(blob); void generateSummaryAndPreview(); }}
+              onMessageSkip={() => void generateSummaryAndPreview()}
               onSave={handleSave}
               isSaving={isSaving}
-              existingPeople={existingPeople}
+              existingPeople={existingPeople.map((p) => p.name)}
             />
           }
         />
@@ -483,7 +536,7 @@ function Actions({
   state, onNameSave, onSkip, onRelationSave, onRelationSkip, setFlowState, narratingMessage,
   onAddMore, onViewLifeStory, onNextQuestion, isLastQuestion,
   onNarrationSave, onNarrationSkip, onMessageSave, onMessageSkip,
-  onSave, isSaving, existingPeople,
+  onSave, onSaveModified, isSaving, existingPeople,
 }: {
   state: FlowState;
   onNameSave: (name: string) => void;
@@ -501,12 +554,14 @@ function Actions({
   onMessageSave: (blob: Blob) => void;
   onMessageSkip: () => void;
   onSave: () => void;
+  onSaveModified: (text: string) => void;
   isSaving: boolean;
   existingPeople: string[];
 }) {
   switch (state) {
     case "empty":
     case "analyzing":
+    case "no-people":
       return null;
 
     case "done":
@@ -545,6 +600,9 @@ function Actions({
     case "message-record":
       return <RecordForm key="message" onSave={onMessageSave} onSkip={onMessageSkip} />;
 
+    case "generating":
+      return null;
+
     case "narrating":
       return (
         <>
@@ -556,7 +614,7 @@ function Actions({
       );
 
     case "modifying":
-      return <ModifyForm initial={narratingMessage} onSave={() => setFlowState("done")} />;
+      return <ModifyForm initial={narratingMessage} onSave={onSaveModified} />;
   }
 }
 
@@ -678,12 +736,13 @@ function RecordForm({ onSave, onSkip }: { onSave: (blob: Blob) => void; onSkip: 
   );
 }
 
-function ModifyForm({ initial, onSave }: { initial: string; onSave: () => void }) {
+function ModifyForm({ initial, onSave }: { initial: string; onSave: (text: string) => void }) {
+  const ref = useRef<HTMLTextAreaElement>(null);
   return (
-    <form className="flex flex-col gap-2 w-full" onSubmit={(e) => { e.preventDefault(); onSave(); }}>
-      <textarea defaultValue={initial} rows={4}
+    <form className="flex flex-col gap-2 w-full" onSubmit={(e) => { e.preventDefault(); onSave(ref.current?.value ?? initial); }}>
+      <textarea ref={ref} defaultValue={initial} rows={4}
         className="w-full rounded-[4px] border border-cream-50 bg-paper px-4 py-3 text-base font-light text-ink placeholder:text-cream-150 focus:outline-none focus:border-ink/40 transition-colors resize-none" />
-      <div className="flex gap-2"><Button variant="primary" type="submit">Save</Button></div>
+      <div className="flex gap-2"><Button variant="primary" type="submit">Looks good</Button></div>
     </form>
   );
 }

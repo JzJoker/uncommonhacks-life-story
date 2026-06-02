@@ -21,15 +21,17 @@ type ButtonProps = {
   href?: string;
   onClick?: (event?: React.MouseEvent<HTMLButtonElement>) => void;
   disabled?: boolean;
+  children?: React.ReactNode;
 };
 
 export default function Button({
   className = "",
-  text = "Button",
+  text = "",
   variant = "default",
   href,
   onClick,
   disabled = false,
+  children,
 }: ButtonProps) {
   const classes = `${baseClass} ${variants[variant]} ${className}`.trim();
 
@@ -56,6 +58,7 @@ export default function Button({
       onClick={onClick}
       disabled={disabled}
     >
+      {children}
       {text}
     </button>
   );

@@ -10,7 +10,7 @@ export default async function PersonAlbumPage(props: {
   const [{ data: person }, { data: memoryPeople }] = await Promise.all([
     supabase
       .from("friends_family")
-      .select("name, relation")
+      .select("name, relation, narration")
       .eq("id", personId)
       .single(),
     supabase
@@ -20,6 +20,9 @@ export default async function PersonAlbumPage(props: {
         memories (
           id,
           image_url,
+          image_width,
+          image_height,
+          summary,
           answer_who_is_this,
           answer_whats_going_on,
           message_audio_url
@@ -30,6 +33,7 @@ export default async function PersonAlbumPage(props: {
 
   const name = person?.name ?? "Unknown";
   const relation = person?.relation ?? null;
+  const narration = person?.narration ?? null;
 
   const photoCards: PhotoCardData[] = (memoryPeople ?? [])
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -38,14 +42,13 @@ export default async function PersonAlbumPage(props: {
     .map((mp: any, i: number) => ({
       id: `${mp.id}-${i}`,
       src: mp.memories.image_url as string,
-      quote: (mp.memories.answer_whats_going_on || mp.memories.answer_who_is_this || "") as string,
+      quote: (mp.memories.summary || mp.memories.answer_whats_going_on || mp.memories.answer_who_is_this || "") as string,
       attribution: relation ? `${name}, your ${relation.toLowerCase()}` : name,
+      memoryId: mp.memories.id as string,
+      imageWidth: (mp.memories.image_width as number | null) ?? null,
+      imageHeight: (mp.memories.image_height as number | null) ?? null,
       messageAudioUrl: (mp.memories.message_audio_url as string | null) ?? null,
     }));
-
-  const bio = relation
-    ? `Browse your memories with ${name}, your ${relation.toLowerCase()}.`
-    : `Browse your memories with ${name}.`;
 
   return (
     <div className="flex h-dvh min-h-0 flex-col overflow-hidden rounded-xl bg-cream-100 p-px text-ink">
@@ -58,7 +61,9 @@ export default async function PersonAlbumPage(props: {
         <IndividualAlbumView
           photoCards={photoCards}
           personName={name}
-          personBio={bio}
+          personNarration={narration}
+          personId={personId}
+          patientId={patientId}
         />
       )}
     </div>

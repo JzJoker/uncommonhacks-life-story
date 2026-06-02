@@ -58,7 +58,7 @@ export default function OnboardingPage() {
               className="w-full rounded-[4px] border border-cream-50 bg-paper px-4 py-3 text-base font-light text-ink placeholder:text-cream-150 focus:outline-none focus:border-ink/40 transition-colors resize-none"
             />
           </Field>
-
+{/* 
           <Field label="Experience mode" htmlFor="mode">
             <div className="flex flex-col gap-2">
               {(["self_paced", "caregiver_guided"] as const).map((m) => (
@@ -71,11 +71,11 @@ export default function OnboardingPage() {
                 </label>
               ))}
             </div>
-          </Field>
+          </Field> */}
 
           {error && <p className="text-sm text-red-500 font-light">{error}</p>}
 
-          <Button variant="primary" type="submit" disabled={saving} className="w-full uppercase tracking-[0.18em]">
+          <Button variant="primary" type="submit" disabled={saving} className="w-full cursor-pointer">
             {saving ? "Creating…" : "Create Life Story"}
           </Button>
         </form>
