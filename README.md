@@ -31,6 +31,7 @@ Caregivers, friends, and family collaboratively build a memory journal using pho
 - **Experience modes** — self-paced or caregiver-guided depending on the patient's stage
 - **No hallucination** — AI only uses information explicitly provided by family; nothing is invented or inferred
 - **Ethically bounded AI** — human validation before any content reaches a patient
+- **Direct Patient-App interface** — added physical memory record player to automatically scan album photos and match them with digital memories
 
 ---
 
@@ -44,6 +45,25 @@ Caregivers, friends, and family collaboratively build a memory journal using pho
 | Design | Figma |
 | Object Detection | Person detection models (no facial recognition) |
 | Hosting | Vercel |
+
+---
+
+## How Memory Record Player Works
+
+The Memory Record Player uses a physical photo as an input trigger. An ESP32-S3 camera captures the printed photo, and an OpenCV/Pytorch matching pipeline compares it against digital memories in the database.
+
+The system first uses DINOv2 to rank the most visually similar images in the dataset and shortlists them. Then, it runs ORB/RANSAC feature matching on the top DINOv2 candidates to check local keypoint alignment and identify strict feature matches. This helps balance high-level visual similarity with low-level geometric verification. 
+
+Final matching logic:
+
+* DINOv2 filters for visually similar photos
+* ORB/RANSAC verifies feature-level matches
+* If DINO scores are close, ORB inliers help decide the best match
+* If ORB finds matches but DINO similarity is too low, the result is rejected as a false positive
+
+**Checks and Balances algorithm between DINO and ORB**
+
+This hybrid approach was used because ORB alone produced false matches, especially with glare, blur, angled photos, and partial crops. DINOv2 helps verify that the image is visually similar, while ORB/RANSAC checks whether the local features actually line up..
 
 ---
 
