@@ -50,7 +50,7 @@ Caregivers, friends, and family collaboratively build a memory journal using pho
 
 ## How Memory Record Player Works
 
-The Memory Record Player uses a physical photo as an input trigger. An ESP32-S3 camera captures the printed photo, and an OpenCV/Pytorch matching pipeline compares it against digital memories in the database.
+The  **[Memory Record Player](./memory%20record%20player/)** uses a physical photo as an input trigger. An ESP32-S3 camera captures the printed photo, and an OpenCV/Pytorch matching pipeline compares it against digital memories in the database.
 
 The system first uses DINOv2 to rank the most visually similar images in the dataset and shortlists them. Then, it runs ORB/RANSAC feature matching on the top DINOv2 candidates to check local keypoint alignment and identify strict feature matches. This helps balance high-level visual similarity with low-level geometric verification. 
 
@@ -151,4 +151,4 @@ supabase/                     # Database migrations
 - **Justin Zhao** — Backend/database (SWE @ RIT)
 - **Andy Lin**
 - **Junheng Zheng**
-- **Vincent Lin**
+- **Vincent Lin** — Embedded/Computer Vision (MECA + CPET @ RIT)
