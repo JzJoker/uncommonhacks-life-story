@@ -7,7 +7,7 @@ import torch.nn.functional as F
 from PIL import Image
 from transformers import AutoImageProcessor, AutoModel
 
-ESP32_URL        = "http://192.168.2.151:81/jpeg"
+ESP32_URL        = "" #replace with your ESP32 serial output link, the one that ends with /jpeg, the URL is different for every network.
 DATASET_FOLDER = "memory record player/image_dataset"
 output_folder = "memory record player/match_results"
 
